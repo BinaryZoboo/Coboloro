@@ -27,3 +27,5 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+# Progress file (local development notes)
+PROGRESS.md
