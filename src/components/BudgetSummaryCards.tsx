@@ -1,6 +1,21 @@
 import { motion } from "framer-motion";
 import { TrendingDownIcon, TrendingUpIcon, WalletIcon } from "lucide-react";
-export function BudgetSummaryCards() {
+
+interface BudgetSummaryCardsProps {
+  incomeTotal: number;
+  expenseTotal: number;
+}
+
+export function BudgetSummaryCards({
+  incomeTotal,
+  expenseTotal,
+}: BudgetSummaryCardsProps) {
+  const balance = incomeTotal - expenseTotal;
+  const formatAmount = (value: number) =>
+    value.toLocaleString("fr-FR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
   return (
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
       {/* Revenus */}
@@ -26,14 +41,9 @@ export function BudgetSummaryCards() {
           </div>
         </div>
         <p className="text-2xl font-bold text-white tracking-tight">
-          4 250,00 €
+          {formatAmount(incomeTotal)} €
         </p>
-        <div className="flex items-center gap-1.5 mt-2">
-          <span className="text-xs font-medium text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded">
-            +12,5%
-          </span>
-          <span className="text-xs text-gray-500">vs mois dernier</span>
-        </div>
+        <p className="text-xs text-gray-500 mt-2">Total enregistre</p>
       </motion.div>
 
       {/* Dépenses */}
@@ -59,14 +69,9 @@ export function BudgetSummaryCards() {
           </div>
         </div>
         <p className="text-2xl font-bold text-white tracking-tight">
-          2 847,50 €
+          {formatAmount(expenseTotal)} €
         </p>
-        <div className="flex items-center gap-1.5 mt-2">
-          <span className="text-xs font-medium text-red-400 bg-red-400/10 px-1.5 py-0.5 rounded">
-            +3,2%
-          </span>
-          <span className="text-xs text-gray-500">vs mois dernier</span>
-        </div>
+        <p className="text-xs text-gray-500 mt-2">Total enregistre</p>
       </motion.div>
 
       {/* Solde */}
@@ -92,14 +97,9 @@ export function BudgetSummaryCards() {
           </div>
         </div>
         <p className="text-2xl font-bold text-gold tracking-tight">
-          1 402,50 €
+          {formatAmount(balance)} €
         </p>
-        <div className="flex items-center gap-1.5 mt-2">
-          <span className="text-xs font-medium text-gold bg-gold/10 px-1.5 py-0.5 rounded">
-            +28,1%
-          </span>
-          <span className="text-xs text-gray-500">vs mois dernier</span>
-        </div>
+        <p className="text-xs text-gray-500 mt-2">Balance actuelle</p>
       </motion.div>
     </div>
   );

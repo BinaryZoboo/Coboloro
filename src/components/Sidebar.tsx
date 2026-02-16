@@ -13,6 +13,13 @@ import { useState } from "react";
 
 interface SidebarProps {
   onLogout: () => void;
+  activeItem?: string;
+  onNavigate?: (itemId: string) => void;
+  userProfile?: {
+    firstName: string;
+    lastName: string;
+    email: string;
+  } | null;
 }
 
 const navItems: {
@@ -47,9 +54,30 @@ const navItems: {
   },
 ];
 
-export function Sidebar({ onLogout }: SidebarProps) {
-  const [activeItem, setActiveItem] = useState("dashboard");
+export function Sidebar({
+  onLogout,
+  activeItem,
+  onNavigate,
+  userProfile,
+}: SidebarProps) {
+  const [internalActiveItem, setInternalActiveItem] = useState("dashboard");
+  const currentActiveItem = activeItem ?? internalActiveItem;
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Generate initials from user profile
+  const getInitials = () => {
+    if (!userProfile) return "U";
+    const firstInitial = userProfile.firstName?.charAt(0) || "";
+    const lastInitial = userProfile.lastName?.charAt(0) || "";
+    return (firstInitial + lastInitial).toUpperCase() || "U";
+  };
+
+  const getFullName = () => {
+    if (!userProfile) return "Utilisateur";
+    return (
+      `${userProfile.firstName} ${userProfile.lastName}`.trim() || "Utilisateur"
+    );
+  };
   const sidebarContent = (
     <div className="flex flex-col h-full">
       {/* Logo */}
@@ -68,13 +96,17 @@ export function Sidebar({ onLogout }: SidebarProps) {
       <nav className="flex-1 px-3 mt-2" aria-label="Navigation principale">
         <ul className="space-y-1">
           {navItems.map((item) => {
-            const isActive = activeItem === item.id;
+            const isActive = currentActiveItem === item.id;
             const Icon = item.icon;
             return (
               <li key={item.id}>
                 <button
                   onClick={() => {
-                    setActiveItem(item.id);
+                    if (onNavigate) {
+                      onNavigate(item.id);
+                    } else {
+                      setInternalActiveItem(item.id);
+                    }
                     setMobileOpen(false);
                   }}
                   className={`
@@ -97,14 +129,14 @@ export function Sidebar({ onLogout }: SidebarProps) {
         <div className="border-t border-dark-border pt-4 mb-3 mx-3" />
         <div className="flex items-center gap-3 px-4 py-2">
           <div className="w-9 h-9 rounded-full bg-dark-elevated border border-dark-border flex items-center justify-center text-sm font-semibold text-gold">
-            ND
+            {getInitials()}
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-gray-200 truncate">
-              Nathan Dancoine
+              {getFullName()}
             </p>
             <p className="text-xs text-gray-500 truncate">
-              dancoinathan@gmail.com
+              {userProfile?.email || "utilisateur@email.com"}
             </p>
           </div>
         </div>

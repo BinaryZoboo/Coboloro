@@ -21,11 +21,15 @@ export function LoginPage({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<{
     email?: string;
     password?: string;
     confirmPassword?: string;
+    firstName?: string;
+    lastName?: string;
   }>({});
   const [formError, setFormError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
@@ -50,6 +54,11 @@ export function LoginPage({
 
   function switchView(nextView: ViewMode) {
     setView(nextView);
+    setEmail("");
+    setPassword("");
+    setConfirmPassword("");
+    setFirstName("");
+    setLastName("");
     setErrors({});
     setFormError("");
     setStatusMessage("");
@@ -60,7 +69,18 @@ export function LoginPage({
       email?: string;
       password?: string;
       confirmPassword?: string;
+      firstName?: string;
+      lastName?: string;
     } = {};
+
+    if (view === "signup") {
+      if (!firstName.trim()) {
+        newErrors.firstName = "Prénom requis";
+      }
+      if (!lastName.trim()) {
+        newErrors.lastName = "Nom requis";
+      }
+    }
 
     if (view !== "updatePassword") {
       if (!email.trim()) {
@@ -120,6 +140,24 @@ export function LoginPage({
           password,
         });
         if (error) throw error;
+
+        // Create profile entry with first_name and last_name
+        if (data.user) {
+          const { error: profileError } = await supabase
+            .from("profiles")
+            .insert({
+              id: data.user.id,
+              user_id: data.user.id,
+              first_name: firstName,
+              last_name: lastName,
+              created_at: new Date().toISOString(),
+            });
+
+          if (profileError) {
+            console.error("Failed to create profile", profileError);
+          }
+        }
+
         if (!data.session) {
           setStatusMessage("Compte créé. Vérifie ta boîte e-mail.");
         }
@@ -239,6 +277,74 @@ export function LoginPage({
                 </div>
               )}
 
+              {/* First Name (signup only) */}
+              {view === "signup" && (
+                <div>
+                  <label
+                    htmlFor="signup-firstname"
+                    className="block text-xs font-medium text-gray-400 mb-2"
+                  >
+                    Prénom
+                  </label>
+                  <input
+                    id="signup-firstname"
+                    type="text"
+                    autoComplete="given-name"
+                    placeholder="John"
+                    value={firstName}
+                    onChange={(e) => {
+                      setFirstName(e.target.value);
+                      if (errors.firstName)
+                        setErrors((prev) => ({
+                          ...prev,
+                          firstName: undefined,
+                        }));
+                    }}
+                    disabled={isLoading}
+                    className={`w-full bg-dark-elevated border rounded-lg px-4 py-3 text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold transition-colors disabled:opacity-50 ${errors.firstName ? "border-red-500" : "border-dark-border"}`}
+                  />
+                  {errors.firstName && (
+                    <p className="text-xs text-red-400 mt-1.5" role="alert">
+                      {errors.firstName}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Last Name (signup only) */}
+              {view === "signup" && (
+                <div>
+                  <label
+                    htmlFor="signup-lastname"
+                    className="block text-xs font-medium text-gray-400 mb-2"
+                  >
+                    Nom
+                  </label>
+                  <input
+                    id="signup-lastname"
+                    type="text"
+                    autoComplete="family-name"
+                    placeholder="Doe"
+                    value={lastName}
+                    onChange={(e) => {
+                      setLastName(e.target.value);
+                      if (errors.lastName)
+                        setErrors((prev) => ({
+                          ...prev,
+                          lastName: undefined,
+                        }));
+                    }}
+                    disabled={isLoading}
+                    className={`w-full bg-dark-elevated border rounded-lg px-4 py-3 text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold transition-colors disabled:opacity-50 ${errors.lastName ? "border-red-500" : "border-dark-border"}`}
+                  />
+                  {errors.lastName && (
+                    <p className="text-xs text-red-400 mt-1.5" role="alert">
+                      {errors.lastName}
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Email */}
               {showEmailField && (
                 <div>
@@ -252,7 +358,7 @@ export function LoginPage({
                     id="login-email"
                     type="email"
                     autoComplete="email"
-                    placeholder="jean@email.com"
+                    placeholder="johndoe@email.com"
                     value={email}
                     onChange={(e) => {
                       setEmail(e.target.value);

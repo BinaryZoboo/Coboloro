@@ -1,28 +1,20 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { XIcon } from "lucide-react";
-import { useState, type SyntheticEvent } from "react";
-import type { NewTransactionInput } from "../transaction";
+import { useEffect, useState, type SyntheticEvent } from "react";
+import type { Category, NewTransactionInput } from "../transaction";
 
 interface AddTransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (input: NewTransactionInput) => void;
+  categories: Category[];
 }
-const categories = [
-  "Alimentation",
-  "Transport",
-  "Logement",
-  "Loisirs",
-  "Santé",
-  "Éducation",
-  "Vêtements",
-  "Autres",
-];
 
 export function AddTransactionModal({
   isOpen,
   onClose,
   onSubmit,
+  categories,
 }: AddTransactionModalProps) {
   const [type, setType] = useState<"expense" | "income">("expense");
   const [amount, setAmount] = useState("");
@@ -30,6 +22,14 @@ export function AddTransactionModal({
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const filteredCategories = categories.filter((cat) => cat.type === type);
+
+  useEffect(() => {
+    if (!filteredCategories.some((cat) => cat.id === category)) {
+      setCategory("");
+    }
+  }, [category, filteredCategories]);
   function validate() {
     const newErrors: Record<string, string> = {};
     if (!amount || parseFloat(amount) <= 0) newErrors.amount = "Montant requis";
@@ -48,7 +48,7 @@ export function AddTransactionModal({
     onSubmit({
       type,
       amount: amountNumber,
-      category,
+      categoryId: category,
       description,
       date,
     });
@@ -186,11 +186,17 @@ export function AddTransactionModal({
                   <option value="" disabled>
                     Sélectionner une catégorie
                   </option>
-                  {categories.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
+                  {filteredCategories.length === 0 ? (
+                    <option value="" disabled>
+                      Aucune catégorie disponible
                     </option>
-                  ))}
+                  ) : (
+                    filteredCategories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </option>
+                    ))
+                  )}
                 </select>
                 {errors.category && (
                   <p className="text-xs text-red-400 mt-1">{errors.category}</p>

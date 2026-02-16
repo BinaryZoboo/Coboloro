@@ -1,5 +1,11 @@
 export type TransactionType = "expense" | "income";
 
+export interface Category {
+  id: string;
+  name: string;
+  type: TransactionType;
+}
+
 export interface Transaction {
   id: string;
   merchant: string;
@@ -12,7 +18,7 @@ export interface Transaction {
 export interface NewTransactionInput {
   type: TransactionType;
   amount: number;
-  category: string;
+  categoryId: string;
   description: string;
   date: string;
 }

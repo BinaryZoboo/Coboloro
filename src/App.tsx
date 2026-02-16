@@ -2,11 +2,14 @@ import type { Session } from "@supabase/supabase-js";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { supabase } from "./lib/supabaseClient";
+import { CategoriesPage } from "./pages/CategoriesPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { LoginPage } from "./pages/LoginPage";
+import { TransactionsPage } from "./pages/TransactionsPage";
 export function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [authMode, setAuthMode] = useState<"default" | "recovery">("default");
+  const [activePage, setActivePage] = useState("dashboard");
 
   useEffect(() => {
     let isMounted = true;
@@ -71,7 +74,52 @@ export function App() {
             duration: 0.3,
           }}
         >
-          <DashboardPage onLogout={() => supabase.auth.signOut()} />
+          {activePage === "categories" ? (
+            <CategoriesPage
+              onLogout={() => supabase.auth.signOut()}
+              userId={session.user.id}
+              activeItem={activePage}
+              onNavigate={(itemId) => {
+                if (
+                  itemId === "dashboard" ||
+                  itemId === "categories" ||
+                  itemId === "transactions"
+                ) {
+                  setActivePage(itemId);
+                }
+              }}
+            />
+          ) : activePage === "transactions" ? (
+            <TransactionsPage
+              onLogout={() => supabase.auth.signOut()}
+              userId={session.user.id}
+              activeItem={activePage}
+              onNavigate={(itemId) => {
+                if (
+                  itemId === "dashboard" ||
+                  itemId === "categories" ||
+                  itemId === "transactions"
+                ) {
+                  setActivePage(itemId);
+                }
+              }}
+            />
+          ) : (
+            <DashboardPage
+              onLogout={() => supabase.auth.signOut()}
+              userId={session.user.id}
+              activeItem={activePage}
+              onNavigate={(itemId) => {
+                if (
+                  itemId === "dashboard" ||
+                  itemId === "categories" ||
+                  itemId === "transactions"
+                ) {
+                  setActivePage(itemId);
+                }
+              }}
+            />
+          )}
         </motion.div>
       ) : (
         <motion.div

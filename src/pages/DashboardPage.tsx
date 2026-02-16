@@ -1,127 +1,237 @@
 import { motion } from "framer-motion";
 import { BellIcon, CalendarIcon, PlusIcon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AddTransactionModal } from "../components/AddTransactionModal";
 import { BudgetSummaryCards } from "../components/BudgetSummaryCards";
 import { Sidebar } from "../components/Sidebar";
 import { SpendingChart } from "../components/SpendingChart";
 import { TransactionList } from "../components/TransactionList";
-import type { NewTransactionInput, Transaction } from "../transaction";
+import { supabase } from "../lib/supabaseClient";
+import type {
+  Category,
+  NewTransactionInput,
+  Transaction,
+} from "../transaction";
 
 interface DashboardPageProps {
   onLogout: () => void;
+  userId: string;
+  activeItem?: string;
+  onNavigate?: (itemId: string) => void;
 }
-
-const initialTransactions: Transaction[] = [
-  {
-    id: "1",
-    merchant: "Carrefour Market",
-    category: "Alimentation",
-    amount: -67.42,
-    type: "expense",
-    date: "2026-02-12",
-  },
-  {
-    id: "2",
-    merchant: "Salaire — Entreprise",
-    category: "Revenu",
-    amount: 3200.0,
-    type: "income",
-    date: "2026-02-10",
-  },
-  {
-    id: "3",
-    merchant: "SNCF — TGV Paris",
-    category: "Transport",
-    amount: -89.0,
-    type: "expense",
-    date: "2026-02-09",
-  },
-  {
-    id: "4",
-    merchant: "Loyer Février",
-    category: "Logement",
-    amount: -950.0,
-    type: "expense",
-    date: "2026-02-05",
-  },
-  {
-    id: "5",
-    merchant: "Netflix",
-    category: "Loisirs",
-    amount: -17.99,
-    type: "expense",
-    date: "2026-02-04",
-  },
-  {
-    id: "6",
-    merchant: "Pharmacie Centrale",
-    category: "Santé",
-    amount: -23.5,
-    type: "expense",
-    date: "2026-02-03",
-  },
-  {
-    id: "7",
-    merchant: "Freelance — Projet Web",
-    category: "Revenu",
-    amount: 1050.0,
-    type: "income",
-    date: "2026-02-02",
-  },
-  {
-    id: "8",
-    merchant: "EDF — Électricité",
-    category: "Électricité",
-    amount: -78.3,
-    type: "expense",
-    date: "2026-02-01",
-  },
-  {
-    id: "9",
-    merchant: "Boulangerie Paul",
-    category: "Alimentation",
-    amount: -8.4,
-    type: "expense",
-    date: "2026-01-31",
-  },
-  {
-    id: "10",
-    merchant: "Amazon",
-    category: "Autres",
-    amount: -45.99,
-    type: "expense",
-    date: "2026-01-30",
-  },
+const defaultCategories: Array<Omit<Category, "id">> = [
+  { name: "Alimentation", type: "expense" },
+  { name: "Transport", type: "expense" },
+  { name: "Logement", type: "expense" },
+  { name: "Loisirs", type: "expense" },
+  { name: "Santé", type: "expense" },
+  { name: "Éducation", type: "expense" },
+  { name: "Vêtements", type: "expense" },
+  { name: "Autres", type: "expense" },
+  { name: "Revenu", type: "income" },
+  { name: "Freelance", type: "income" },
+  { name: "Autres revenus", type: "income" },
 ];
 
-export function DashboardPage({ onLogout }: DashboardPageProps) {
+const chartPalette = [
+  "#C9A84C",
+  "#A08535",
+  "#E8D48B",
+  "#D4A853",
+  "#8B7332",
+  "#6B5A2E",
+  "#BFA35A",
+  "#9B7C3C",
+];
+
+export function DashboardPage({
+  onLogout,
+  userId,
+  activeItem,
+  onNavigate,
+}: DashboardPageProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [transactions, setTransactions] =
-    useState<Transaction[]>(initialTransactions);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [userProfile, setUserProfile] = useState<{
+    firstName: string;
+    lastName: string;
+    email: string;
+  } | null>(null);
 
-  function handleAddTransaction(input: NewTransactionInput) {
-    const amount =
-      input.type === "expense"
-        ? -Math.abs(input.amount)
-        : Math.abs(input.amount);
+  useEffect(() => {
+    let isMounted = true;
 
-    const id =
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : String(Date.now());
+    async function loadProfile() {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user?.email) return;
+
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("first_name, last_name")
+        .eq("id", userId)
+        .single();
+
+      if (error) {
+        console.error("Failed to load profile", error);
+        return;
+      }
+
+      if (data && isMounted) {
+        setUserProfile({
+          firstName: data.first_name || "Utilisateur",
+          lastName: data.last_name || "",
+          email: user.user.email,
+        });
+      }
+    }
+
+    async function loadCategories() {
+      const { data, error } = await supabase
+        .from("categories")
+        .select("id, name, type")
+        .order("name");
+
+      if (error) {
+        console.error("Failed to load categories", error);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        if (isMounted) {
+          setCategories(data as Category[]);
+        }
+        return;
+      }
+
+      const { error: seedError } = await supabase.from("categories").insert(
+        defaultCategories.map((category) => ({
+          ...category,
+          user_id: userId,
+        })),
+      );
+
+      if (seedError) {
+        console.error("Failed to seed categories", seedError);
+        return;
+      }
+
+      const { data: seeded, error: seededError } = await supabase
+        .from("categories")
+        .select("id, name, type")
+        .order("name");
+
+      if (seededError) {
+        console.error("Failed to reload categories", seededError);
+        return;
+      }
+
+      if (isMounted) {
+        setCategories((seeded ?? []) as Category[]);
+      }
+    }
+
+    async function loadTransactions() {
+      const { data, error } = await supabase
+        .from("transactions")
+        .select("id, amount, type, date, note, category_id, categories(name)")
+        .order("date", { ascending: false });
+
+      if (error) {
+        console.error("Failed to load transactions", error);
+        return;
+      }
+
+      const mapped = (data ?? []).map((row) => {
+        const amountValue = Number(row.amount ?? 0);
+        const signedAmount =
+          row.type === "expense"
+            ? -Math.abs(amountValue)
+            : Math.abs(amountValue);
+
+        return {
+          id: row.id,
+          merchant: row.note ?? "",
+          category: row.categories?.[0]?.name ?? "Autres",
+          amount: signedAmount,
+          type: row.type,
+          date: row.date,
+        } as Transaction;
+      });
+
+      if (isMounted) {
+        setTransactions(mapped);
+      }
+    }
+
+    void loadProfile();
+    void loadCategories();
+    void loadTransactions();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [userId]);
+
+  async function handleAddTransaction(input: NewTransactionInput) {
+    const amountValue = Math.abs(input.amount);
+    const selectedCategory = categories.find(
+      (category) => category.id === input.categoryId,
+    );
+
+    if (!selectedCategory) {
+      console.error("Category not found for transaction");
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("transactions")
+      .insert({
+        user_id: userId,
+        category_id: input.categoryId,
+        amount: amountValue,
+        type: input.type,
+        note: input.description,
+        date: input.date,
+      })
+      .select("id, amount, type, date, note, category_id, categories(name)")
+      .single();
+
+    if (error) {
+      console.error("Failed to add transaction", error);
+      return;
+    }
+
+    const signedAmount =
+      data.type === "expense"
+        ? -Math.abs(Number(data.amount ?? 0))
+        : Math.abs(Number(data.amount ?? 0));
 
     const newTx: Transaction = {
-      id,
-      merchant: input.description,
-      category: input.category,
-      amount,
-      type: input.type,
-      date: input.date,
+      id: data.id,
+      merchant: data.note ?? input.description,
+      category: data.categories?.[0]?.name ?? selectedCategory.name,
+      amount: signedAmount,
+      type: data.type,
+      date: data.date,
     };
 
     setTransactions((prev) => [newTx, ...prev]);
     setIsModalOpen(false);
+  }
+
+  async function handleDeleteTransaction(transactionId: string) {
+    const { error } = await supabase
+      .from("transactions")
+      .delete()
+      .eq("id", transactionId);
+
+    if (error) {
+      console.error("Failed to delete transaction", error);
+      return;
+    }
+
+    setTransactions((prev) => prev.filter((tx) => tx.id !== transactionId));
   }
 
   const today = new Date().toLocaleDateString("fr-FR", {
@@ -130,9 +240,45 @@ export function DashboardPage({ onLogout }: DashboardPageProps) {
     month: "long",
     year: "numeric",
   });
+
+  const totals = transactions.reduce(
+    (acc, tx) => {
+      const value = Math.abs(tx.amount);
+      if (tx.type === "income") {
+        acc.income += value;
+      } else {
+        acc.expense += value;
+      }
+      return acc;
+    },
+    { income: 0, expense: 0 },
+  );
+
+  const expenseByCategory = transactions.reduce(
+    (acc, tx) => {
+      if (tx.type !== "expense") return acc;
+      const value = Math.abs(tx.amount);
+      acc[tx.category] = (acc[tx.category] ?? 0) + value;
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
+
+  const chartData = Object.entries(expenseByCategory)
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, value], index) => ({
+      name,
+      value,
+      color: chartPalette[index % chartPalette.length],
+    }));
   return (
     <div className="min-h-screen w-full bg-dark">
-      <Sidebar onLogout={onLogout} />
+      <Sidebar
+        onLogout={onLogout}
+        activeItem={activeItem}
+        onNavigate={onNavigate}
+        userProfile={userProfile}
+      />
 
       {/* Main content */}
       <main className="lg:ml-64">
@@ -154,7 +300,7 @@ export function DashboardPage({ onLogout }: DashboardPageProps) {
                 }}
                 className="text-lg font-semibold text-white"
               >
-                Bonjour, Nathan 👋
+                Bonjour, {userProfile?.firstName || "Utilisateur"} 👋
               </motion.h1>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <CalendarIcon className="w-3.5 h-3.5 text-gray-500" />
@@ -184,14 +330,21 @@ export function DashboardPage({ onLogout }: DashboardPageProps) {
 
         {/* Content */}
         <div className="px-6 py-6 lg:px-8 lg:py-8 space-y-6">
-          <BudgetSummaryCards />
+          <BudgetSummaryCards
+            incomeTotal={totals.income}
+            expenseTotal={totals.expense}
+          />
 
           <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
             <div className="xl:col-span-2">
-              <SpendingChart />
+              <SpendingChart data={chartData} />
             </div>
             <div className="xl:col-span-3">
-              <TransactionList transactions={transactions} />
+              <TransactionList
+                transactions={transactions}
+                onDeleteTransaction={handleDeleteTransaction}
+                onViewAll={() => onNavigate?.("transactions")}
+              />
             </div>
           </div>
         </div>
@@ -201,6 +354,7 @@ export function DashboardPage({ onLogout }: DashboardPageProps) {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSubmit={handleAddTransaction}
+        categories={categories}
       />
     </div>
   );
