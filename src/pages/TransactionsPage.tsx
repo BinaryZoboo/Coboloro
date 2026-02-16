@@ -315,7 +315,6 @@ export function TransactionsPage({
     setIsModalOpen(false);
   }
 
-  const expenseCategories = categories.filter((c) => c.type === "expense");
   const allYears = Array.from(
     new Set(transactions.map((tx) => new Date(tx.date).getFullYear())),
   ).sort((a, b) => b - a);
