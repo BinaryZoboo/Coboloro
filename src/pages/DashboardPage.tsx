@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { BellIcon, CalendarIcon, PlusIcon } from "lucide-react";
+import { CalendarIcon, PlusIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AddTransactionModal } from "../components/AddTransactionModal";
 import { BudgetSummaryCards } from "../components/BudgetSummaryCards";
@@ -43,6 +43,13 @@ const chartPalette = [
   "#BFA35A",
   "#9B7C3C",
 ];
+
+function getCategoryName(categories: unknown) {
+  if (Array.isArray(categories)) {
+    return (categories[0] as { name?: string } | undefined)?.name;
+  }
+  return (categories as { name?: string } | null)?.name;
+}
 
 export function DashboardPage({
   onLogout,
@@ -152,7 +159,7 @@ export function DashboardPage({
         return {
           id: row.id,
           merchant: row.note ?? "",
-          category: row.categories?.[0]?.name ?? "Autres",
+          category: getCategoryName(row.categories) ?? "Autres",
           amount: signedAmount,
           type: row.type,
           date: row.date,
@@ -210,7 +217,7 @@ export function DashboardPage({
     const newTx: Transaction = {
       id: data.id,
       merchant: data.note ?? input.description,
-      category: data.categories?.[0]?.name ?? selectedCategory.name,
+      category: getCategoryName(data.categories) ?? selectedCategory.name,
       amount: signedAmount,
       type: data.type,
       date: data.date,
@@ -284,8 +291,8 @@ export function DashboardPage({
       <main className="lg:ml-64">
         {/* Header */}
         <header className="sticky top-0 z-20 bg-dark/80 backdrop-blur-lg border-b border-dark-border">
-          <div className="flex items-center justify-between px-6 py-4 lg:px-8">
-            <div className="ml-12 lg:ml-0">
+          <div className="flex flex-nowrap gap-3 px-6 py-4 lg:px-8 items-center justify-between">
+            <div className="ml-12 lg:ml-0 min-w-0">
               <motion.h1
                 initial={{
                   opacity: 0,
@@ -298,28 +305,20 @@ export function DashboardPage({
                 transition={{
                   duration: 0.3,
                 }}
-                className="text-lg font-semibold text-white"
+                className="text-base sm:text-lg font-semibold text-white"
               >
                 Bonjour, {userProfile?.firstName || "Utilisateur"} 👋
               </motion.h1>
-              <div className="flex items-center gap-1.5 mt-0.5">
+              <div className="flex items-center gap-1.5 mt-0.5 whitespace-nowrap">
                 <CalendarIcon className="w-3.5 h-3.5 text-gray-500" />
                 <p className="text-xs text-gray-500 capitalize">{today}</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <button
-                className="relative p-2 rounded-lg text-gray-400 hover:text-white hover:bg-dark-card transition-colors"
-                aria-label="Notifications"
-              >
-                <BellIcon className="w-5 h-5" />
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-gold rounded-full" />
-              </button>
-
+            <div className="flex items-center gap-3 shrink-0">
               <button
                 onClick={() => setIsModalOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gold text-dark text-sm font-semibold hover:bg-gold-light transition-colors duration-200"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gold text-dark text-sm font-semibold hover:bg-gold-light transition-colors duration-200 whitespace-nowrap"
               >
                 <PlusIcon className="w-4 h-4" />
                 <span className="hidden sm:inline">Ajouter</span>

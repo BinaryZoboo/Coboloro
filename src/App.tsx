@@ -2,6 +2,7 @@ import type { Session } from "@supabase/supabase-js";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { supabase } from "./lib/supabaseClient";
+import { BudgetPage } from "./pages/BudgetPage";
 import { CategoriesPage } from "./pages/CategoriesPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -83,7 +84,24 @@ export function App() {
                 if (
                   itemId === "dashboard" ||
                   itemId === "categories" ||
-                  itemId === "transactions"
+                  itemId === "transactions" ||
+                  itemId === "budget"
+                ) {
+                  setActivePage(itemId);
+                }
+              }}
+            />
+          ) : activePage === "budget" ? (
+            <BudgetPage
+              onLogout={() => supabase.auth.signOut()}
+              userId={session.user.id}
+              activeItem={activePage}
+              onNavigate={(itemId) => {
+                if (
+                  itemId === "dashboard" ||
+                  itemId === "categories" ||
+                  itemId === "transactions" ||
+                  itemId === "budget"
                 ) {
                   setActivePage(itemId);
                 }
@@ -98,7 +116,8 @@ export function App() {
                 if (
                   itemId === "dashboard" ||
                   itemId === "categories" ||
-                  itemId === "transactions"
+                  itemId === "transactions" ||
+                  itemId === "budget"
                 ) {
                   setActivePage(itemId);
                 }
@@ -113,7 +132,8 @@ export function App() {
                 if (
                   itemId === "dashboard" ||
                   itemId === "categories" ||
-                  itemId === "transactions"
+                  itemId === "transactions" ||
+                  itemId === "budget"
                 ) {
                   setActivePage(itemId);
                 }

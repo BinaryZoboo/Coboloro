@@ -301,7 +301,7 @@ export function CategoriesPage({
 
       <main className="lg:ml-64">
         <header className="sticky top-0 z-20 bg-dark/80 backdrop-blur-lg border-b border-dark-border">
-          <div className="flex items-center justify-between px-6 py-4 lg:px-8">
+          <div className="flex flex-col gap-3 px-6 py-4 lg:px-8 sm:flex-row sm:items-center sm:justify-between">
             <div className="ml-12 lg:ml-0">
               <motion.h1
                 initial={{

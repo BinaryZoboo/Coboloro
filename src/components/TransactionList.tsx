@@ -96,7 +96,7 @@ export function TransactionList({
           return (
             <div
               key={tx.id}
-              className="flex items-center gap-3 px-5 py-3.5 hover:bg-dark-hover transition-colors duration-100"
+              className="grid grid-cols-[auto,1fr] gap-3 px-5 py-3.5 hover:bg-dark-hover transition-colors duration-100 sm:flex sm:items-center"
             >
               <div
                 className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${isIncome ? "bg-emerald-500/10" : "bg-red-500/10"}`}
@@ -106,34 +106,54 @@ export function TransactionList({
                 />
               </div>
 
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-200 truncate">
-                  {tx.merchant}
-                </p>
-                <p className="text-xs text-gray-500">{tx.category}</p>
-              </div>
+              <div className="min-w-0 sm:flex sm:items-center sm:flex-1 sm:gap-4">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-medium text-gray-200 truncate">
+                      {tx.merchant}
+                    </p>
+                    <p
+                      className={`text-sm font-semibold tabular-nums flex-shrink-0 lg:hidden ${isIncome ? "text-emerald-400" : "text-red-400"}`}
+                    >
+                      {isIncome ? "+" : "-"}
+                      {Math.abs(tx.amount).toLocaleString("fr-FR", {
+                        minimumFractionDigits: 2,
+                      })}{" "}
+                      €
+                    </p>
+                  </div>
+                  <div className="mt-1 flex items-center justify-between gap-3">
+                    <p className="text-xs text-gray-500">{tx.category}</p>
+                    <p className="text-xs text-gray-500 flex-shrink-0 lg:hidden">
+                      {displayDate}
+                    </p>
+                  </div>
+                </div>
 
-              <div className="text-right flex-shrink-0">
-                <p
-                  className={`text-sm font-semibold tabular-nums ${isIncome ? "text-emerald-400" : "text-red-400"}`}
-                >
-                  {isIncome ? "+" : "-"}
-                  {Math.abs(tx.amount).toLocaleString("fr-FR", {
-                    minimumFractionDigits: 2,
-                  })}{" "}
-                  €
-                </p>
-                <p className="text-xs text-gray-500">{displayDate}</p>
-              </div>
+                <div className="mt-2 flex items-center justify-between gap-3 sm:mt-0 lg:gap-6">
+                  <div className="hidden lg:block text-right">
+                    <p
+                      className={`text-sm font-semibold tabular-nums ${isIncome ? "text-emerald-400" : "text-red-400"}`}
+                    >
+                      {isIncome ? "+" : "-"}
+                      {Math.abs(tx.amount).toLocaleString("fr-FR", {
+                        minimumFractionDigits: 2,
+                      })}{" "}
+                      €
+                    </p>
+                    <p className="text-xs text-gray-500">{displayDate}</p>
+                  </div>
 
-              <button
-                type="button"
-                onClick={() => setPendingDelete(tx)}
-                className="ml-1 p-2 rounded-lg text-gray-500 hover:text-red-400 hover:bg-dark-elevated transition-colors"
-                aria-label="Supprimer la transaction"
-              >
-                <Trash2Icon className="w-4 h-4" />
-              </button>
+                  <button
+                    type="button"
+                    onClick={() => setPendingDelete(tx)}
+                    className="hidden lg:inline-flex p-2 rounded-lg text-gray-500 hover:text-red-400 hover:bg-dark-elevated transition-colors"
+                    aria-label="Supprimer la transaction"
+                  >
+                    <Trash2Icon className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
             </div>
           );
         })}

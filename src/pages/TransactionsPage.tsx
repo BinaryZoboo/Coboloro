@@ -1,9 +1,11 @@
 import { AnimatePresence, motion } from "framer-motion";
 import {
   CalendarIcon,
+  CheckIcon,
   FilterIcon,
   PencilIcon,
   PlusIcon,
+  RotateCcwIcon,
   Trash2Icon,
   XIcon,
 } from "lucide-react";
@@ -22,6 +24,13 @@ interface TransactionsPageProps {
   userId: string;
   activeItem?: string;
   onNavigate?: (itemId: string) => void;
+}
+
+function getCategoryName(categories: unknown) {
+  if (Array.isArray(categories)) {
+    return (categories[0] as { name?: string } | undefined)?.name;
+  }
+  return (categories as { name?: string } | null)?.name;
 }
 
 export function TransactionsPage({
@@ -51,6 +60,14 @@ export function TransactionsPage({
   const [selectedType, setSelectedType] = useState<
     "all" | "income" | "expense"
   >("all");
+  const [draftYear, setDraftYear] = useState<number>(new Date().getFullYear());
+  const [draftMonth, setDraftMonth] = useState<number | null>(
+    new Date().getMonth(),
+  );
+  const [draftCategory, setDraftCategory] = useState<string | null>(null);
+  const [draftType, setDraftType] = useState<"all" | "income" | "expense">(
+    "all",
+  );
 
   // Edit modal
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -64,6 +81,7 @@ export function TransactionsPage({
 
   // Delete modal
   const [pendingDelete, setPendingDelete] = useState<Transaction | null>(null);
+  const [pendingAction, setPendingAction] = useState<Transaction | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -130,7 +148,7 @@ export function TransactionsPage({
         return {
           id: row.id,
           merchant: row.note ?? "",
-          category: row.categories?.[0]?.name ?? "Autres",
+          category: getCategoryName(row.categories) ?? "Autres",
           amount: signedAmount,
           type: row.type,
           date: row.date,
@@ -189,6 +207,33 @@ export function TransactionsPage({
     setEditDate(tx.date);
     setEditType(tx.type);
     setEditError("");
+  };
+
+  const handleRowActionRequest = (tx: Transaction) => {
+    if (typeof window !== "undefined") {
+      const isDesktop = window.matchMedia("(min-width: 1024px)").matches;
+      if (isDesktop) return;
+    }
+    setPendingAction(tx);
+  };
+
+  const handleApplyFilters = () => {
+    setSelectedYear(draftYear);
+    setSelectedMonth(draftMonth);
+    setSelectedCategory(draftCategory);
+    setSelectedType(draftType);
+  };
+
+  const handleResetFilters = () => {
+    const now = new Date();
+    setDraftYear(now.getFullYear());
+    setDraftMonth(now.getMonth());
+    setDraftCategory(null);
+    setDraftType("all");
+    setSelectedYear(now.getFullYear());
+    setSelectedMonth(now.getMonth());
+    setSelectedCategory(null);
+    setSelectedType("all");
   };
 
   const handleSaveEdit = async () => {
@@ -305,7 +350,7 @@ export function TransactionsPage({
     const newTx: Transaction = {
       id: data.id,
       merchant: data.note ?? input.description,
-      category: data.categories?.[0]?.name ?? selectedCategory.name,
+      category: getCategoryName(data.categories) ?? selectedCategory.name,
       amount: signedAmount,
       type: data.type,
       date: data.date,
@@ -359,8 +404,8 @@ export function TransactionsPage({
       <main className="lg:ml-64">
         {/* Header */}
         <header className="sticky top-0 z-20 bg-dark/80 backdrop-blur-lg border-b border-dark-border">
-          <div className="flex items-center justify-between px-6 py-4 lg:px-8">
-            <div className="ml-12 lg:ml-0">
+          <div className="flex items-center justify-between gap-3 px-6 py-4 lg:px-8">
+            <div className="ml-12 lg:ml-0 min-w-0">
               <motion.h1
                 initial={{ opacity: 0, y: -8 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -377,7 +422,7 @@ export function TransactionsPage({
 
             <button
               onClick={() => setIsModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gold text-dark text-sm font-semibold hover:bg-gold-light transition-colors duration-200"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gold text-dark text-sm font-semibold hover:bg-gold-light transition-colors duration-200 flex-shrink-0"
             >
               <PlusIcon className="w-4 h-4" />
               <span className="hidden sm:inline">Ajouter</span>
@@ -386,13 +431,13 @@ export function TransactionsPage({
         </header>
 
         {/* Content */}
-        <div className="px-6 py-6 lg:px-8 lg:py-8 space-y-6">
+        <div className="px-6 py-6 lg:px-8 lg:py-8 flex flex-col gap-6">
           {/* Summary Cards */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.1 }}
-            className="grid grid-cols-1 md:grid-cols-3 gap-4"
+            className="order-2 lg:order-1 grid grid-cols-1 md:grid-cols-3 gap-4"
           >
             <div className="bg-dark-card border border-dark-border rounded-xl p-5">
               <p className="text-xs font-medium text-gray-500 mb-2">Revenus</p>
@@ -436,11 +481,31 @@ export function TransactionsPage({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.2 }}
-            className="bg-dark-card border border-dark-border rounded-xl p-5 space-y-4"
+            className="order-1 lg:order-2 bg-dark-card border border-dark-border rounded-xl p-5 space-y-4"
           >
-            <div className="flex items-center gap-2 mb-4">
-              <FilterIcon className="w-4 h-4 text-gold" />
-              <h3 className="text-sm font-semibold text-white">Filtres</h3>
+            <div className="flex items-center justify-between gap-2 mb-4">
+              <div className="flex items-center gap-2">
+                <FilterIcon className="w-4 h-4 text-gold" />
+                <h3 className="text-sm font-semibold text-white">Filtres</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleResetFilters}
+                  className="p-2 rounded-lg border border-dark-border text-gray-300 hover:text-white hover:bg-dark-hover transition-colors"
+                  aria-label="Réinitialiser les filtres"
+                >
+                  <RotateCcwIcon className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleApplyFilters}
+                  className="p-2 rounded-lg bg-gold text-dark hover:bg-gold-light transition-colors"
+                  aria-label="Appliquer les filtres"
+                >
+                  <CheckIcon className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -450,8 +515,8 @@ export function TransactionsPage({
                   Année
                 </label>
                 <select
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(Number(e.target.value))}
+                  value={draftYear}
+                  onChange={(e) => setDraftYear(Number(e.target.value))}
                   className="w-full bg-dark-elevated border border-dark-border rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold transition-colors"
                 >
                   {allYears.map((year) => (
@@ -468,9 +533,9 @@ export function TransactionsPage({
                   Mois
                 </label>
                 <select
-                  value={selectedMonth ?? ""}
+                  value={draftMonth ?? ""}
                   onChange={(e) =>
-                    setSelectedMonth(
+                    setDraftMonth(
                       e.target.value === "" ? null : Number(e.target.value),
                     )
                   }
@@ -491,11 +556,9 @@ export function TransactionsPage({
                   Type
                 </label>
                 <select
-                  value={selectedType}
+                  value={draftType}
                   onChange={(e) =>
-                    setSelectedType(
-                      e.target.value as "all" | "income" | "expense",
-                    )
+                    setDraftType(e.target.value as "all" | "income" | "expense")
                   }
                   className="w-full bg-dark-elevated border border-dark-border rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold transition-colors"
                 >
@@ -511,9 +574,9 @@ export function TransactionsPage({
                   Catégorie
                 </label>
                 <select
-                  value={selectedCategory ?? ""}
+                  value={draftCategory ?? ""}
                   onChange={(e) =>
-                    setSelectedCategory(
+                    setDraftCategory(
                       e.target.value === "" ? null : e.target.value,
                     )
                   }
@@ -535,7 +598,7 @@ export function TransactionsPage({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.3 }}
-            className="bg-dark-card border border-dark-border rounded-xl overflow-hidden"
+            className="order-3 bg-dark-card border border-dark-border rounded-xl overflow-hidden"
           >
             {isLoading ? (
               <div className="p-8 text-center">
@@ -556,34 +619,51 @@ export function TransactionsPage({
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: 20 }}
                       transition={{ duration: 0.3, delay: index * 0.05 }}
-                      className="flex items-center justify-between p-5 hover:bg-dark-hover transition-colors duration-100"
+                      className="flex items-center justify-between gap-4 p-5 hover:bg-dark-hover transition-colors duration-100 cursor-pointer lg:cursor-default"
+                      onClick={() => handleRowActionRequest(tx)}
                     >
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-200 truncate">
-                          {tx.merchant || "Sans description"}
-                        </p>
-                        <div className="flex items-center gap-3 mt-1">
-                          <span
-                            className={`text-xs font-medium px-2 py-1 rounded-full ${
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-medium text-gray-200 truncate">
+                            {tx.merchant || "Sans description"}
+                          </p>
+                          <p
+                            className={`text-base font-semibold flex-shrink-0 min-[425px]:hidden ${
                               tx.type === "income"
-                                ? "bg-emerald-500/20 text-emerald-400"
-                                : "bg-red-500/20 text-red-400"
+                                ? "text-emerald-400"
+                                : "text-red-400"
                             }`}
                           >
-                            {tx.type === "income" ? "Revenu" : "Dépense"}
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            {tx.category}
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            {new Date(tx.date).toLocaleDateString("fr-FR")}
-                          </span>
+                            {tx.type === "income" ? "+" : "-"}
+                            {Math.abs(tx.amount).toLocaleString("fr-FR", {
+                              minimumFractionDigits: 2,
+                            })}{" "}
+                            €
+                          </p>
+                        </div>
+                        <div className="flex justify-between items-center flex-wrap">
+                          <div className="flex flex-wrap items-center gap-2 mt-1">
+                            <span
+                              className={`text-xs font-medium px-2 py-1 rounded-full ${
+                                tx.type === "income"
+                                  ? "bg-emerald-500/20 text-emerald-400"
+                                  : "bg-red-500/20 text-red-400"
+                              }`}
+                            >
+                              {tx.type === "income" ? "Revenu" : "Dépense"}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {tx.category}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {new Date(tx.date).toLocaleDateString("fr-FR")}
+                            </span>
+                          </div>
                         </div>
                       </div>
-
-                      <div className="text-right mr-4 flex-shrink-0">
-                        <p
-                          className={`text-sm font-semibold ${
+                      <div className="hidden min-[425px]:flex items-center gap-3 flex-shrink-0">
+                        <span
+                          className={`text-base font-semibold ${
                             tx.type === "income"
                               ? "text-emerald-400"
                               : "text-red-400"
@@ -594,24 +674,23 @@ export function TransactionsPage({
                             minimumFractionDigits: 2,
                           })}{" "}
                           €
-                        </p>
-                      </div>
-
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <button
-                          onClick={() => handleEditStart(tx)}
-                          className="p-2 rounded-lg text-gray-500 hover:text-gold hover:bg-dark-elevated transition-colors"
-                          aria-label="Modifier"
-                        >
-                          <PencilIcon className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setPendingDelete(tx)}
-                          className="p-2 rounded-lg text-gray-500 hover:text-red-400 hover:bg-dark-elevated transition-colors"
-                          aria-label="Supprimer"
-                        >
-                          <Trash2Icon className="w-4 h-4" />
-                        </button>
+                        </span>
+                        <div className="hidden lg:flex items-center gap-3">
+                          <button
+                            onClick={() => handleEditStart(tx)}
+                            className="p-2.5 rounded-lg text-gray-500 hover:text-gold hover:bg-dark-elevated transition-colors"
+                            aria-label="Modifier"
+                          >
+                            <PencilIcon className="w-5 h-5" />
+                          </button>
+                          <button
+                            onClick={() => setPendingDelete(tx)}
+                            className="p-2.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-dark-elevated transition-colors"
+                            aria-label="Supprimer"
+                          >
+                            <Trash2Icon className="w-5 h-5" />
+                          </button>
+                        </div>
                       </div>
                     </motion.div>
                   ))}
@@ -619,6 +698,67 @@ export function TransactionsPage({
               </div>
             )}
           </motion.div>
+
+          {pendingAction ? (
+            <AnimatePresence>
+              <>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+                  onClick={() => setPendingAction(null)}
+                />
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 12 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 12 }}
+                  transition={{ type: "spring", stiffness: 320, damping: 30 }}
+                  className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                >
+                  <div className="w-full max-w-sm bg-dark-card border border-dark-border rounded-2xl shadow-2xl">
+                    <div className="px-6 py-4 border-b border-dark-border">
+                      <h2 className="text-base font-semibold text-white">
+                        {pendingAction.merchant || "Sans description"}
+                      </h2>
+                    </div>
+                    <div className="px-6 py-4 space-y-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleEditStart(pendingAction);
+                          setPendingAction(null);
+                        }}
+                        className="w-full px-4 py-2.5 rounded-lg bg-dark-elevated border border-dark-border text-gray-200 text-sm font-medium hover:bg-dark-hover transition-colors"
+                      >
+                        Modifier
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPendingDelete(pendingAction);
+                          setPendingAction(null);
+                        }}
+                        className="w-full px-4 py-2.5 rounded-lg bg-red-500/20 border border-red-500/30 text-red-300 text-sm font-medium hover:bg-red-500/30 transition-colors"
+                      >
+                        Supprimer
+                      </button>
+                    </div>
+                    <div className="px-6 py-4 border-t border-dark-border">
+                      <button
+                        type="button"
+                        onClick={() => setPendingAction(null)}
+                        className="w-full px-4 py-2.5 rounded-lg bg-dark-elevated border border-dark-border text-gray-200 text-sm font-medium hover:bg-dark-hover transition-colors"
+                      >
+                        Annuler
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              </>
+            </AnimatePresence>
+          ) : null}
         </div>
       </main>
 
