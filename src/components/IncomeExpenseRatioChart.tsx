@@ -52,8 +52,6 @@ export function IncomeExpenseRatioChart({
     },
   ];
 
-  const balance = income - expense;
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
