@@ -3,21 +3,22 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
+  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 
-interface ChartItem {
+interface BudgetData {
   name: string;
-  value: number;
-  color: string;
+  limit: number;
+  spent: number;
 }
 
-interface SpendingChartProps {
-  data: ChartItem[];
+interface BudgetComparisonChartProps {
+  data: BudgetData[];
+  month?: string;
 }
 
 interface CustomTooltipProps {
@@ -45,41 +46,35 @@ function CustomTooltip({ active, payload }: CustomTooltipProps) {
   );
 }
 
-export function SpendingChart({ data }: SpendingChartProps) {
-  const topData = data.slice(0, 5);
-
+export function BudgetComparisonChart({
+  data,
+  month,
+}: BudgetComparisonChartProps) {
   return (
     <motion.div
-      initial={{
-        opacity: 0,
-        y: 20,
-      }}
-      animate={{
-        opacity: 1,
-        y: 0,
-      }}
-      transition={{
-        duration: 0.4,
-        delay: 0.15,
-      }}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, delay: 0.4 }}
       className="bg-dark-card border border-dark-border rounded-xl p-6"
     >
       <div>
-        <h3 className="text-sm font-semibold text-white">
-          Dépenses par catégorie
-        </h3>
-        <p className="text-xs text-gray-500 mt-1">Top 5 catégories</p>
+        <h2 className="text-sm font-semibold text-white">
+          Limite vs Dépenses réelles
+        </h2>
+        <p className="text-xs text-gray-500 mt-1">
+          Comparaison par catégorie {month && `- ${month}`}
+        </p>
       </div>
 
-      {topData.length === 0 ? (
+      {data.length === 0 ? (
         <div className="py-12 text-center text-sm text-gray-500">
-          Aucune dépense enregistrée pour le moment.
+          Aucune donnée disponible pour ce mois.
         </div>
       ) : (
-        <div className="mt-6 w-full h-64">
+        <div className="mt-6 w-full h-80">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
-              data={topData}
+              data={data}
               margin={{ top: 20, right: 30, left: 0, bottom: 5 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -93,16 +88,22 @@ export function SpendingChart({ data }: SpendingChartProps) {
               />
               <YAxis stroke="#9CA3AF" style={{ fontSize: "12px" }} />
               <Tooltip content={<CustomTooltip />} />
+              <Legend
+                wrapperStyle={{ fontSize: "12px", color: "#E5E7EB" }}
+                iconType="square"
+              />
               <Bar
-                dataKey="value"
+                dataKey="limit"
                 fill="#D4A853"
-                name="Montant"
+                name="Limite budgétaire"
                 radius={[8, 8, 0, 0]}
-              >
-                {topData.map((entry, index) => (
-                  <Cell key={`cell-${index.toString()}`} fill={entry.color} />
-                ))}
-              </Bar>
+              />
+              <Bar
+                dataKey="spent"
+                fill="#EF4444"
+                name="Dépenses réelles"
+                radius={[8, 8, 0, 0]}
+              />
             </BarChart>
           </ResponsiveContainer>
         </div>

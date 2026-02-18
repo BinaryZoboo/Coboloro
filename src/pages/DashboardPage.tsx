@@ -3,8 +3,11 @@ import { CalendarIcon, PlusIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AddTransactionModal } from "../components/AddTransactionModal";
 import { BudgetSummaryCards } from "../components/BudgetSummaryCards";
+import { IncomeExpenseRatioChart } from "../components/IncomeExpenseRatioChart";
+import { MonthlyTrendChart } from "../components/MonthlyTrendChart";
 import { Sidebar } from "../components/Sidebar";
 import { SpendingChart } from "../components/SpendingChart";
+import { TopExpenseCategoriesChart } from "../components/TopExpenseCategoriesChart";
 import { TransactionList } from "../components/TransactionList";
 import { supabase } from "../lib/supabaseClient";
 import type {
@@ -139,9 +142,11 @@ export function DashboardPage({
     }
 
     async function loadTransactions() {
+      const today = new Date().toISOString().split("T")[0];
       const { data, error } = await supabase
         .from("transactions")
         .select("id, amount, type, date, note, category_id, categories(name)")
+        .lte("date", today)
         .order("date", { ascending: false });
 
       if (error) {
@@ -278,6 +283,45 @@ export function DashboardPage({
       value,
       color: chartPalette[index % chartPalette.length],
     }));
+
+  const monthlyTrendData = (() => {
+    const now = new Date();
+    const months: Record<string, { income: number; expense: number }> = {};
+
+    // Initialiser les 12 derniers mois
+    for (let i = 11; i >= 0; i--) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = date.toLocaleDateString("fr-FR", {
+        month: "short",
+        year: "2-digit",
+      });
+      months[key] = { income: 0, expense: 0 };
+    }
+
+    // Remplir les données
+    transactions.forEach((tx) => {
+      const txDate = new Date(tx.date);
+      const key = txDate.toLocaleDateString("fr-FR", {
+        month: "short",
+        year: "2-digit",
+      });
+
+      if (!months[key]) return;
+
+      const value = Math.abs(tx.amount);
+      if (tx.type === "income") {
+        months[key].income += value;
+      } else {
+        months[key].expense += value;
+      }
+    });
+
+    return Object.entries(months).map(([month, data]) => ({
+      month,
+      income: data.income,
+      expense: data.expense,
+    }));
+  })();
   return (
     <div className="min-h-screen w-full bg-dark">
       <Sidebar
@@ -334,18 +378,26 @@ export function DashboardPage({
             expenseTotal={totals.expense}
           />
 
-          <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
-            <div className="xl:col-span-2">
-              <SpendingChart data={chartData} />
-            </div>
-            <div className="xl:col-span-3">
-              <TransactionList
-                transactions={transactions}
-                onDeleteTransaction={handleDeleteTransaction}
-                onViewAll={() => onNavigate?.("transactions")}
-              />
-            </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <SpendingChart data={chartData} />
+
+            <IncomeExpenseRatioChart
+              income={totals.income}
+              expense={totals.expense}
+            />
           </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <MonthlyTrendChart data={monthlyTrendData} />
+
+            <TopExpenseCategoriesChart data={chartData} />
+          </div>
+
+          <TransactionList
+            transactions={transactions}
+            onDeleteTransaction={handleDeleteTransaction}
+            onViewAll={() => onNavigate?.("transactions")}
+          />
         </div>
       </main>
 

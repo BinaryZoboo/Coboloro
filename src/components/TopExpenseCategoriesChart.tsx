@@ -3,21 +3,20 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 
-interface ChartItem {
+interface TopExpenseItem {
   name: string;
   value: number;
   color: string;
 }
 
-interface SpendingChartProps {
-  data: ChartItem[];
+interface TopExpenseCategoriesChartProps {
+  data: TopExpenseItem[];
 }
 
 interface CustomTooltipProps {
@@ -45,64 +44,59 @@ function CustomTooltip({ active, payload }: CustomTooltipProps) {
   );
 }
 
-export function SpendingChart({ data }: SpendingChartProps) {
-  const topData = data.slice(0, 5);
+export function TopExpenseCategoriesChart({
+  data,
+}: TopExpenseCategoriesChartProps) {
+  const topData = data.slice(0, 6);
 
   return (
     <motion.div
-      initial={{
-        opacity: 0,
-        y: 20,
-      }}
-      animate={{
-        opacity: 1,
-        y: 0,
-      }}
-      transition={{
-        duration: 0.4,
-        delay: 0.15,
-      }}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, delay: 0.35 }}
       className="bg-dark-card border border-dark-border rounded-xl p-6"
     >
       <div>
-        <h3 className="text-sm font-semibold text-white">
-          Dépenses par catégorie
-        </h3>
-        <p className="text-xs text-gray-500 mt-1">Top 5 catégories</p>
+        <h2 className="text-sm font-semibold text-white">
+          Top dépenses par catégorie
+        </h2>
+        <p className="text-xs text-gray-500 mt-1">
+          Les 6 catégories les plus dépensées
+        </p>
       </div>
 
       {topData.length === 0 ? (
         <div className="py-12 text-center text-sm text-gray-500">
-          Aucune dépense enregistrée pour le moment.
+          Aucune donnée disponible.
         </div>
       ) : (
         <div className="mt-6 w-full h-64">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
               data={topData}
-              margin={{ top: 20, right: 30, left: 0, bottom: 5 }}
+              layout="vertical"
+              margin={{ top: 5, right: 30, left: 100, bottom: 5 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
               <XAxis
-                dataKey="name"
+                type="number"
                 stroke="#9CA3AF"
                 style={{ fontSize: "12px" }}
-                angle={-45}
-                textAnchor="end"
-                height={80}
               />
-              <YAxis stroke="#9CA3AF" style={{ fontSize: "12px" }} />
+              <YAxis
+                dataKey="name"
+                type="category"
+                stroke="#9CA3AF"
+                style={{ fontSize: "11px" }}
+                width={95}
+              />
               <Tooltip content={<CustomTooltip />} />
               <Bar
                 dataKey="value"
                 fill="#D4A853"
+                radius={[0, 8, 8, 0]}
                 name="Montant"
-                radius={[8, 8, 0, 0]}
-              >
-                {topData.map((entry, index) => (
-                  <Cell key={`cell-${index.toString()}`} fill={entry.color} />
-                ))}
-              </Bar>
+              />
             </BarChart>
           </ResponsiveContainer>
         </div>

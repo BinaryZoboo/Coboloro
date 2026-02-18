@@ -367,6 +367,12 @@ export function CategoriesPage({
                   type="text"
                   value={formName}
                   onChange={(event) => setFormName(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && formName.trim()) {
+                      event.preventDefault();
+                      void handleAddCategory();
+                    }
+                  }}
                   placeholder="Ex: Animaux"
                   className={`w-full bg-dark-elevated border border-dark-border rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-2 transition-colors ${formAccentClass}`}
                 />
