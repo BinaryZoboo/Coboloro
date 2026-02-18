@@ -105,23 +105,6 @@ export function IncomeExpenseRatioChart({
               </BarChart>
             </ResponsiveContainer>
           </div>
-
-          <div className="mt-6 flex items-center justify-center">
-            <div className="text-center">
-              <p className="text-xs text-gray-500">Balance</p>
-              <p
-                className={`text-2xl font-bold mt-1 ${
-                  balance >= 0 ? "text-emerald-400" : "text-red-400"
-                }`}
-              >
-                {balance >= 0 ? "+" : ""}
-                {balance.toFixed(2)} €
-              </p>
-              <p className="text-xs text-gray-500 mt-1">
-                {balance >= 0 ? "Tu as de l'épargne" : "Déficit budgétaire"}
-              </p>
-            </div>
-          </div>
         </>
       )}
     </motion.div>
