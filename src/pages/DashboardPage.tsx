@@ -23,6 +23,7 @@ interface DashboardPageProps {
   onNavigate?: (itemId: string) => void;
 }
 const defaultCategories: Array<Omit<Category, "id">> = [
+  { name: "A completer", type: "expense" },
   { name: "Alimentation", type: "expense" },
   { name: "Transport", type: "expense" },
   { name: "Logement", type: "expense" },
