@@ -1,14 +1,39 @@
 import type { Session } from "@supabase/supabase-js";
 import { AnimatePresence, motion } from "framer-motion";
 import { BellIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { supabase } from "./lib/supabaseClient";
-import { BudgetPage } from "./pages/BudgetPage";
-import { CategoriesPage } from "./pages/CategoriesPage";
-import { DashboardPage } from "./pages/DashboardPage";
-import { LoginPage } from "./pages/LoginPage";
-import { QuickExpensePage } from "./pages/QuickExpensePage";
-import { TransactionsPage } from "./pages/TransactionsPage";
+
+const BudgetPage = lazy(() =>
+  import("./pages/BudgetPage").then((module) => ({
+    default: module.BudgetPage,
+  })),
+);
+const CategoriesPage = lazy(() =>
+  import("./pages/CategoriesPage").then((module) => ({
+    default: module.CategoriesPage,
+  })),
+);
+const DashboardPage = lazy(() =>
+  import("./pages/DashboardPage").then((module) => ({
+    default: module.DashboardPage,
+  })),
+);
+const LoginPage = lazy(() =>
+  import("./pages/LoginPage").then((module) => ({
+    default: module.LoginPage,
+  })),
+);
+const QuickExpensePage = lazy(() =>
+  import("./pages/QuickExpensePage").then((module) => ({
+    default: module.QuickExpensePage,
+  })),
+);
+const TransactionsPage = lazy(() =>
+  import("./pages/TransactionsPage").then((module) => ({
+    default: module.TransactionsPage,
+  })),
+);
 
 function isMobileViewport() {
   if (typeof window === "undefined") return false;
@@ -19,6 +44,12 @@ export function App() {
   const [authMode, setAuthMode] = useState<"default" | "recovery">("default");
   const [activePage, setActivePage] = useState("dashboard");
   const [quickReminderCount, setQuickReminderCount] = useState(0);
+
+  const fallback = (
+    <div className="min-h-screen flex items-center justify-center bg-dark text-gray-300">
+      Chargement...
+    </div>
+  );
 
   async function checkQuickEntryReminder(userId: string) {
     const { data, error } = await supabase
@@ -87,10 +118,12 @@ export function App() {
               duration: 0.3,
             }}
           >
-            <LoginPage
-              mode="recovery"
-              onRecoveryComplete={() => setAuthMode("default")}
-            />
+            <Suspense fallback={fallback}>
+              <LoginPage
+                mode="recovery"
+                onRecoveryComplete={() => setAuthMode("default")}
+              />
+            </Suspense>
           </motion.div>
         ) : session ? (
           <motion.div
@@ -108,81 +141,83 @@ export function App() {
               duration: 0.3,
             }}
           >
-            {activePage === "categories" ? (
-              <CategoriesPage
-                onLogout={() => supabase.auth.signOut()}
-                userId={session.user.id}
-                activeItem={activePage}
-                onNavigate={(itemId) => {
-                  if (
-                    itemId === "dashboard" ||
-                    itemId === "categories" ||
-                    itemId === "transactions" ||
-                    itemId === "budget" ||
-                    itemId === "quick-entry"
-                  ) {
-                    setActivePage(itemId);
-                  }
-                }}
-              />
-            ) : activePage === "budget" ? (
-              <BudgetPage
-                onLogout={() => supabase.auth.signOut()}
-                userId={session.user.id}
-                activeItem={activePage}
-                onNavigate={(itemId) => {
-                  if (
-                    itemId === "dashboard" ||
-                    itemId === "categories" ||
-                    itemId === "transactions" ||
-                    itemId === "budget" ||
-                    itemId === "quick-entry"
-                  ) {
-                    setActivePage(itemId);
-                  }
-                }}
-              />
-            ) : activePage === "transactions" ? (
-              <TransactionsPage
-                onLogout={() => supabase.auth.signOut()}
-                userId={session.user.id}
-                activeItem={activePage}
-                onNavigate={(itemId) => {
-                  if (
-                    itemId === "dashboard" ||
-                    itemId === "categories" ||
-                    itemId === "transactions" ||
-                    itemId === "budget" ||
-                    itemId === "quick-entry"
-                  ) {
-                    setActivePage(itemId);
-                  }
-                }}
-              />
-            ) : activePage === "quick-entry" ? (
-              <QuickExpensePage
-                onLogout={() => supabase.auth.signOut()}
-                userId={session.user.id}
-                onHome={() => setActivePage("dashboard")}
-              />
-            ) : (
-              <DashboardPage
-                onLogout={() => supabase.auth.signOut()}
-                userId={session.user.id}
-                activeItem={activePage}
-                onNavigate={(itemId) => {
-                  if (
-                    itemId === "dashboard" ||
-                    itemId === "categories" ||
-                    itemId === "transactions" ||
-                    itemId === "budget" ||
-                    itemId === "quick-entry"
-                  ) {
-                    setActivePage(itemId);
-                  }
-                }}
-              />
-            )}
+            <Suspense fallback={fallback}>
+              {activePage === "categories" ? (
+                <CategoriesPage
+                  onLogout={() => supabase.auth.signOut()}
+                  userId={session.user.id}
+                  activeItem={activePage}
+                  onNavigate={(itemId) => {
+                    if (
+                      itemId === "dashboard" ||
+                      itemId === "categories" ||
+                      itemId === "transactions" ||
+                      itemId === "budget" ||
+                      itemId === "quick-entry"
+                    ) {
+                      setActivePage(itemId);
+                    }
+                  }}
+                />
+              ) : activePage === "budget" ? (
+                <BudgetPage
+                  onLogout={() => supabase.auth.signOut()}
+                  userId={session.user.id}
+                  activeItem={activePage}
+                  onNavigate={(itemId) => {
+                    if (
+                      itemId === "dashboard" ||
+                      itemId === "categories" ||
+                      itemId === "transactions" ||
+                      itemId === "budget" ||
+                      itemId === "quick-entry"
+                    ) {
+                      setActivePage(itemId);
+                    }
+                  }}
+                />
+              ) : activePage === "transactions" ? (
+                <TransactionsPage
+                  onLogout={() => supabase.auth.signOut()}
+                  userId={session.user.id}
+                  activeItem={activePage}
+                  onNavigate={(itemId) => {
+                    if (
+                      itemId === "dashboard" ||
+                      itemId === "categories" ||
+                      itemId === "transactions" ||
+                      itemId === "budget" ||
+                      itemId === "quick-entry"
+                    ) {
+                      setActivePage(itemId);
+                    }
+                  }}
+                />
+              ) : activePage === "quick-entry" ? (
+                <QuickExpensePage
+                  onLogout={() => supabase.auth.signOut()}
+                  userId={session.user.id}
+                  onHome={() => setActivePage("dashboard")}
+                />
+              ) : (
+                <DashboardPage
+                  onLogout={() => supabase.auth.signOut()}
+                  userId={session.user.id}
+                  activeItem={activePage}
+                  onNavigate={(itemId) => {
+                    if (
+                      itemId === "dashboard" ||
+                      itemId === "categories" ||
+                      itemId === "transactions" ||
+                      itemId === "budget" ||
+                      itemId === "quick-entry"
+                    ) {
+                      setActivePage(itemId);
+                    }
+                  }}
+                />
+              )}
+            </Suspense>
           </motion.div>
         ) : (
           <motion.div
@@ -200,7 +235,9 @@ export function App() {
               duration: 0.3,
             }}
           >
-            <LoginPage />
+            <Suspense fallback={fallback}>
+              <LoginPage />
+            </Suspense>
           </motion.div>
         )}
       </AnimatePresence>
