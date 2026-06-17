@@ -55,33 +55,24 @@ export function TransactionList({
 
   return (
     <motion.div
-      initial={{
-        opacity: 0,
-        y: 20,
-      }}
-      animate={{
-        opacity: 1,
-        y: 0,
-      }}
-      transition={{
-        duration: 0.4,
-        delay: 0.4,
-      }}
-      className="bg-dark-card border border-dark-border rounded-xl"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, delay: 0.4 }}
+      className="bg-surface-card border border-surface-border rounded-xl"
     >
-      <div className="flex items-center justify-between px-5 py-4 border-b border-dark-border">
-        <h3 className="text-sm font-semibold text-white">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-surface-border">
+        <h3 className="text-sm font-semibold text-fg">
           Transactions récentes
         </h3>
         <button
           onClick={onViewAll}
-          className="text-xs font-medium text-gold hover:text-gold-light transition-colors"
+          className="text-xs font-medium text-accent hover:text-accent-light transition-colors"
         >
           Voir tout
         </button>
       </div>
 
-      <div className="divide-y divide-dark-border">
+      <div className="divide-y divide-surface-border">
         {recentTransactions.map((tx) => {
           const Icon = categoryIconMap[tx.category] ?? CreditCardIcon;
 
@@ -96,7 +87,7 @@ export function TransactionList({
           return (
             <div
               key={tx.id}
-              className="grid grid-cols-[auto,1fr] gap-3 px-5 py-3.5 hover:bg-dark-hover transition-colors duration-100 sm:flex sm:items-center"
+              className="grid grid-cols-[auto,1fr] gap-3 px-5 py-3.5 hover:bg-surface-hover transition-colors duration-100 sm:flex sm:items-center"
             >
               <div
                 className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${isIncome ? "bg-emerald-500/10" : "bg-red-500/10"}`}
@@ -109,7 +100,7 @@ export function TransactionList({
               <div className="min-w-0 sm:flex sm:items-center sm:flex-1 sm:gap-4">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-medium text-gray-200 truncate">
+                    <p className="text-sm font-medium text-fg-secondary truncate">
                       {tx.merchant}
                     </p>
                     <p
@@ -123,8 +114,8 @@ export function TransactionList({
                     </p>
                   </div>
                   <div className="mt-1 flex items-center justify-between gap-3">
-                    <p className="text-xs text-gray-500">{tx.category}</p>
-                    <p className="text-xs text-gray-500 flex-shrink-0 lg:hidden">
+                    <p className="text-xs text-fg-subtle">{tx.category}</p>
+                    <p className="text-xs text-fg-subtle flex-shrink-0 lg:hidden">
                       {displayDate}
                     </p>
                   </div>
@@ -141,13 +132,13 @@ export function TransactionList({
                       })}{" "}
                       €
                     </p>
-                    <p className="text-xs text-gray-500">{displayDate}</p>
+                    <p className="text-xs text-fg-subtle">{displayDate}</p>
                   </div>
 
                   <button
                     type="button"
                     onClick={() => setPendingDelete(tx)}
-                    className="hidden lg:inline-flex p-2 rounded-lg text-gray-500 hover:text-red-400 hover:bg-dark-elevated transition-colors"
+                    className="hidden lg:inline-flex p-2 rounded-lg text-fg-subtle hover:text-red-400 hover:bg-surface-elevated transition-colors"
                     aria-label="Supprimer la transaction"
                   >
                     <Trash2Icon className="w-4 h-4" />
@@ -159,7 +150,6 @@ export function TransactionList({
         })}
       </div>
 
-      {/* Confirmation modal */}
       {pendingDelete && (
         <>
           <motion.div
@@ -178,25 +168,25 @@ export function TransactionList({
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
             className="fixed inset-0 flex items-center justify-center z-50 p-4"
           >
-            <div className="bg-dark-card border border-dark-border rounded-xl shadow-2xl max-w-sm w-full">
-              <div className="px-6 py-4 border-b border-dark-border">
-                <h2 className="text-base font-semibold text-white">
+            <div className="bg-surface-card border border-surface-border rounded-xl shadow-2xl max-w-sm w-full">
+              <div className="px-6 py-4 border-b border-surface-border">
+                <h2 className="text-base font-semibold text-fg">
                   Supprimer la transaction ?
                 </h2>
               </div>
 
               <div className="px-6 py-4">
-                <p className="text-sm text-gray-400 mb-4">
+                <p className="text-sm text-fg-muted mb-4">
                   Êtes-vous sûr de vouloir supprimer cette transaction ?
                 </p>
-                <div className="bg-dark-elevated border border-dark-border rounded-lg p-3 mb-4">
-                  <p className="text-sm font-medium text-gray-200">
+                <div className="bg-surface-elevated border border-surface-border rounded-lg p-3 mb-4">
+                  <p className="text-sm font-medium text-fg-secondary">
                     {pendingDelete.merchant || "Sans description"}
                   </p>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-fg-subtle mt-1">
                     {pendingDelete.category} • {pendingDelete.date}
                   </p>
-                  <p className="text-sm font-semibold mt-2">
+                  <p className="text-sm font-semibold mt-2 text-fg">
                     {pendingDelete.type === "income" ? "+" : "-"}
                     {Math.abs(pendingDelete.amount).toLocaleString("fr-FR", {
                       minimumFractionDigits: 2,
@@ -204,15 +194,15 @@ export function TransactionList({
                     €
                   </p>
                 </div>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-fg-subtle">
                   Cette action est irréversible.
                 </p>
               </div>
 
-              <div className="px-6 py-4 border-t border-dark-border flex gap-3">
+              <div className="px-6 py-4 border-t border-surface-border flex gap-3">
                 <button
                   onClick={() => setPendingDelete(null)}
-                  className="flex-1 px-4 py-2.5 rounded-lg bg-dark-elevated border border-dark-border text-gray-200 text-sm font-medium hover:bg-dark-hover transition-colors"
+                  className="flex-1 px-4 py-2.5 rounded-lg bg-surface-elevated border border-surface-border text-fg-secondary text-sm font-medium hover:bg-surface-hover transition-colors"
                 >
                   Annuler
                 </button>

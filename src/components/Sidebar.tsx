@@ -1,222 +1,217 @@
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeftRightIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
   LayoutDashboardIcon,
   LogOutIcon,
-  MenuIcon,
-  SettingsIcon,
+  PiggyBankIcon,
+  PlusIcon,
   TagIcon,
+  TrendingDownIcon,
   WalletIcon,
-  XIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { ThemeToggle } from "./ThemeToggle";
 
 interface SidebarProps {
   onLogout: () => void;
   activeItem?: string;
   onNavigate?: (itemId: string) => void;
-  userProfile?: {
-    firstName: string;
-    lastName: string;
-    email: string;
-  } | null;
+  userProfile?: { firstName: string; lastName: string; email: string } | null;
+  todaySpending?: number;
 }
 
-const navItems: {
-  id: string;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-}[] = [
-  {
-    id: "dashboard",
-    label: "Tableau de bord",
-    icon: LayoutDashboardIcon as React.ComponentType<{ className?: string }>,
-  },
-  {
-    id: "transactions",
-    label: "Transactions",
-    icon: ArrowLeftRightIcon as React.ComponentType<{ className?: string }>,
-  },
-  {
-    id: "budget",
-    label: "Budget",
-    icon: WalletIcon as React.ComponentType<{ className?: string }>,
-  },
-  {
-    id: "categories",
-    label: "Catégories",
-    icon: TagIcon as React.ComponentType<{ className?: string }>,
-  },
-  {
-    id: "settings",
-    label: "Paramètres",
-    icon: SettingsIcon as React.ComponentType<{ className?: string }>,
-  },
-];
+const navItems = [
+  { id: "dashboard",    label: "Tableau de bord", icon: LayoutDashboardIcon },
+  { id: "transactions", label: "Transactions",     icon: ArrowLeftRightIcon },
+  { id: "budget",       label: "Budget",           icon: WalletIcon },
+  { id: "savings",      label: "Épargne",          icon: PiggyBankIcon },
+  { id: "categories",  label: "Catégories",       icon: TagIcon },
+] as const;
 
-export function Sidebar({
-  onLogout,
-  activeItem,
-  onNavigate,
-  userProfile,
-}: SidebarProps) {
-  const [internalActiveItem, setInternalActiveItem] = useState("dashboard");
-  const currentActiveItem = activeItem ?? internalActiveItem;
-  const [mobileOpen, setMobileOpen] = useState(false);
+export function Sidebar({ onLogout, activeItem = "dashboard", onNavigate, userProfile, todaySpending }: SidebarProps) {
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem("sidebar-collapsed") === "true"; } catch { return false; }
+  });
 
-  // Generate initials from user profile
-  const getInitials = () => {
+  const [theme, setTheme] = useState<"dark" | "light">(() => {
+    try { return (localStorage.getItem("theme") as "dark" | "light") ?? "dark"; } catch { return "dark"; }
+  });
+
+  useEffect(() => {
+    document.documentElement.style.setProperty("--sidebar-width", collapsed ? "64px" : "256px");
+    try { localStorage.setItem("sidebar-collapsed", String(collapsed)); } catch {}
+  }, [collapsed]);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("light", theme === "light");
+    try { localStorage.setItem("theme", theme); } catch {}
+  }, [theme]);
+
+  const initials = (() => {
     if (!userProfile) return "U";
-    const firstInitial = userProfile.firstName?.charAt(0) || "";
-    const lastInitial = userProfile.lastName?.charAt(0) || "";
-    return (firstInitial + lastInitial).toUpperCase() || "U";
-  };
+    return ((userProfile.firstName?.[0] ?? "") + (userProfile.lastName?.[0] ?? "")).toUpperCase() || "U";
+  })();
 
-  const getFullName = () => {
-    if (!userProfile) return "Utilisateur";
-    return (
-      `${userProfile.firstName} ${userProfile.lastName}`.trim() || "Utilisateur"
-    );
-  };
-  const sidebarContent = (
-    <div className="flex flex-col h-full">
-      {/* Logo */}
-      <div className="px-6 py-8">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center">
-            <WalletIcon className="w-5 h-5 text-dark" />
-          </div>
-          <span className="text-xl font-bold tracking-tight text-white">
-            COBOLORO
-          </span>
+  const fullName = userProfile
+    ? `${userProfile.firstName} ${userProfile.lastName}`.trim() || "Utilisateur"
+    : "Utilisateur";
+
+  return (
+    <motion.aside
+      animate={{ width: collapsed ? 64 : 256 }}
+      transition={{ type: "spring", stiffness: 320, damping: 32 }}
+      className="hidden lg:flex flex-col fixed inset-y-0 left-0 z-30 bg-surface-card border-r border-surface-border overflow-hidden"
+    >
+      {/* ── Logo ── */}
+      <div className="flex items-center h-16 px-4 border-b border-surface-border flex-shrink-0">
+        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-accent to-accent-dark flex items-center justify-center flex-shrink-0">
+          <WalletIcon className="w-4 h-4 text-accent-fg" />
         </div>
+        <AnimatePresence>
+          {!collapsed && (
+            <motion.div
+              initial={{ opacity: 0, x: -8 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -8 }}
+              transition={{ duration: 0.15 }}
+              className="ml-3 min-w-0"
+            >
+              <p
+                className="text-sm font-bold tracking-tight"
+                style={{
+                  background: "linear-gradient(90deg, rgb(var(--accent-dark)) 0%, rgb(var(--accent-light)) 50%, rgb(var(--accent-dark)) 100%)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                }}
+              >
+                COBOLORO
+              </p>
+              <p className="text-[10px] text-fg-subtle tracking-wide">Finances</p>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 px-3 mt-2" aria-label="Navigation principale">
-        <ul className="space-y-1">
-          {navItems.map((item) => {
-            const isActive = currentActiveItem === item.id;
-            const Icon = item.icon;
+      {/* ── Quick-entry CTA ── */}
+      <div className="px-3 pt-4 pb-2 flex-shrink-0">
+        <button
+          onClick={() => onNavigate?.("quick-entry")}
+          title={collapsed ? "Saisie rapide" : undefined}
+          className={`w-full flex items-center rounded-xl bg-accent/10 border border-accent/20 text-accent hover:bg-accent/18 hover:border-accent/35 transition-colors duration-150 ${collapsed ? "justify-center p-3" : "gap-2.5 px-4 py-2.5"}`}
+        >
+          <PlusIcon className="w-4 h-4 flex-shrink-0" />
+          {!collapsed && <span className="text-sm font-semibold">Saisie rapide</span>}
+        </button>
+      </div>
+
+      {/* ── Nav ── */}
+      <nav className="flex-1 px-2 py-1 overflow-y-auto" aria-label="Navigation principale">
+        <ul className="space-y-0.5">
+          {navItems.map(({ id, label, icon: Icon }) => {
+            const active = activeItem === id;
             return (
-              <li key={item.id}>
+              <li key={id} className="relative group">
                 <button
-                  onClick={() => {
-                    if (onNavigate) {
-                      onNavigate(item.id);
-                    } else {
-                      setInternalActiveItem(item.id);
-                    }
-                    setMobileOpen(false);
-                  }}
+                  onClick={() => onNavigate?.(id)}
+                  aria-current={active ? "page" : undefined}
+                  title={collapsed ? label : undefined}
                   className={`
-                    w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors duration-150 relative
-                    ${isActive ? "text-gold bg-gold-muted" : "text-gray-400 hover:text-gray-200 hover:bg-dark-hover"}
+                    w-full flex items-center rounded-lg text-sm font-medium transition-all duration-100
+                    ${collapsed ? "justify-center p-3" : "gap-3 px-4 py-2.5"}
+                    ${active
+                      ? "text-accent bg-accent/10"
+                      : "text-fg-muted hover:text-fg hover:bg-surface-hover"
+                    }
                   `}
-                  aria-current={isActive ? "page" : undefined}
                 >
-                  <Icon className="w-5 h-5 flex-shrink-0" />
-                  <span>{item.label}</span>
+                  {active && (
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-accent rounded-r-full" />
+                  )}
+                  <Icon className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${active ? "text-accent" : "group-hover:text-accent"}`} />
+                  {!collapsed && <span>{label}</span>}
                 </button>
+
+                {collapsed && (
+                  <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2.5 py-1.5 bg-surface-elevated border border-surface-border text-fg text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 shadow-xl">
+                    {label}
+                  </div>
+                )}
               </li>
             );
           })}
         </ul>
       </nav>
 
-      {/* User section */}
-      <div className="px-3 pb-6">
-        <div className="border-t border-dark-border pt-4 mb-3 mx-3" />
-        <div className="flex items-center gap-3 px-4 py-2">
-          <div className="w-9 h-9 rounded-full bg-dark-elevated border border-dark-border flex items-center justify-center text-sm font-semibold text-gold">
-            {getInitials()}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-200 truncate">
-              {getFullName()}
-            </p>
-            <p className="text-xs text-gray-500 truncate">
-              {userProfile?.email || "utilisateur@email.com"}
-            </p>
-          </div>
-        </div>
-        <button
-          onClick={onLogout}
-          className="w-full flex items-center gap-3 px-4 py-2.5 mt-1 rounded-lg text-sm text-gray-400 hover:text-red-400 hover:bg-red-400/5 transition-colors duration-150"
-        >
-          <LogOutIcon className="w-4 h-4" />
-          <span>Déconnexion</span>
-        </button>
-      </div>
-    </div>
-  );
-
-  return (
-    <>
-      {/* Mobile toggle */}
-      <button
-        onClick={() => setMobileOpen(true)}
-        className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-dark-card border border-dark-border text-gray-400 hover:text-white transition-colors"
-        aria-label="Ouvrir le menu"
-      >
-        <MenuIcon className="w-5 h-5" />
-      </button>
-
-      {/* Desktop sidebar */}
-      <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 bg-dark-card border-r border-dark-border z-30">
-        {sidebarContent}
-      </aside>
-
-      {/* Mobile sidebar */}
+      {/* ── Today spending ── */}
       <AnimatePresence>
-        {mobileOpen && (
-          <>
-            <motion.div
-              initial={{
-                opacity: 0,
-              }}
-              animate={{
-                opacity: 1,
-              }}
-              exit={{
-                opacity: 0,
-              }}
-              transition={{
-                duration: 0.2,
-              }}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
-              onClick={() => setMobileOpen(false)}
-            />
-
-            <motion.aside
-              initial={{
-                x: -280,
-              }}
-              animate={{
-                x: 0,
-              }}
-              exit={{
-                x: -280,
-              }}
-              transition={{
-                type: "spring",
-                stiffness: 300,
-                damping: 30,
-              }}
-              className="fixed inset-y-0 left-0 w-64 bg-dark-card border-r border-dark-border z-50 lg:hidden"
-            >
-              <button
-                onClick={() => setMobileOpen(false)}
-                className="absolute top-4 right-4 p-1.5 rounded-lg text-gray-400 hover:text-white transition-colors"
-                aria-label="Fermer le menu"
-              >
-                <XIcon className="w-5 h-5" />
-              </button>
-              {sidebarContent}
-            </motion.aside>
-          </>
+        {!collapsed && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="mx-3 mb-3 rounded-xl border border-surface-border bg-surface-elevated px-3 py-2.5 flex-shrink-0"
+          >
+            <div className="flex items-center gap-1.5">
+              <TrendingDownIcon className="w-3 h-3 text-red-400" />
+              <p className="text-[10px] uppercase tracking-widest text-fg-subtle">Aujourd'hui</p>
+            </div>
+            <p className="mt-1 text-base font-bold text-fg tabular-nums">
+              {(todaySpending ?? 0).toLocaleString("fr-FR", { style: "currency", currency: "EUR" })}
+            </p>
+          </motion.div>
         )}
       </AnimatePresence>
-    </>
+
+      {/* ── User + theme + logout ── */}
+      <div className="px-2 pb-4 border-t border-surface-border pt-3 flex-shrink-0">
+        <AnimatePresence>
+          {!collapsed && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.12 }}
+              className="flex items-center gap-3 px-3 py-2 mb-1"
+            >
+              <div className="w-8 h-8 rounded-full bg-accent/15 border border-accent/20 flex items-center justify-center text-xs font-bold text-accent flex-shrink-0">
+                {initials}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-fg-secondary truncate">{fullName}</p>
+                <p className="text-[11px] text-fg-subtle truncate">{userProfile?.email ?? ""}</p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <ThemeToggle
+          theme={theme}
+          onToggle={() => setTheme(t => t === "dark" ? "light" : "dark")}
+          collapsed={collapsed}
+        />
+
+        <button
+          onClick={onLogout}
+          title={collapsed ? "Déconnexion" : undefined}
+          className={`w-full flex items-center rounded-lg text-sm text-fg-muted hover:text-red-400 hover:bg-red-400/6 transition-colors duration-150 ${collapsed ? "justify-center p-3" : "gap-3 px-3 py-2.5"}`}
+        >
+          <LogOutIcon className="w-4 h-4 flex-shrink-0" />
+          {!collapsed && <span>Déconnexion</span>}
+        </button>
+      </div>
+
+      {/* ── Collapse toggle ── */}
+      <button
+        onClick={() => setCollapsed(v => !v)}
+        className="absolute -right-3 top-[4.5rem] w-6 h-6 rounded-full bg-surface-elevated border border-surface-border flex items-center justify-center text-fg-muted hover:text-fg hover:bg-surface-muted transition-colors z-40"
+        aria-label={collapsed ? "Développer" : "Réduire"}
+      >
+        {collapsed ? <ChevronRightIcon className="w-3 h-3" /> : <ChevronLeftIcon className="w-3 h-3" />}
+      </button>
+    </motion.aside>
   );
 }

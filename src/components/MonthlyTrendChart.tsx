@@ -1,9 +1,7 @@
-import { motion } from "framer-motion";
 import {
+  Area,
+  AreaChart,
   CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -20,94 +18,112 @@ interface MonthlyTrendChartProps {
   data: MonthlyTrendData[];
 }
 
-interface CustomTooltipProps {
+interface TooltipProps {
   active?: boolean;
-  payload?: Array<{
-    name: string;
-    value: number;
-    color: string;
-  }>;
+  payload?: Array<{ name: string; value: number; color: string }>;
   label?: string;
 }
 
-function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
+function CustomTooltip({ active, payload, label }: TooltipProps) {
   if (!active || !payload?.length) return null;
-
   return (
-    <div className="bg-dark-elevated border border-dark-border rounded-lg px-3 py-2 shadow-xl">
-      <p className="text-sm font-medium text-white">{label}</p>
-      {payload.map((entry, index) => (
-        <p
-          key={index}
-          style={{ color: entry.color }}
-          className="text-sm font-semibold"
-        >
-          {entry.name}: {entry.value.toFixed(2)} €
-        </p>
+    <div className="bg-surface-elevated border border-surface-border rounded-xl px-3 py-2.5 shadow-xl space-y-1.5">
+      <p className="text-[11px] font-medium text-fg-subtle uppercase tracking-wide">{label}</p>
+      {payload.map((entry, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: entry.color }} />
+          <span className="text-xs text-fg-secondary">{entry.name}</span>
+          <span className="text-xs font-semibold text-fg tabular-nums ml-auto pl-4">
+            {(entry.value).toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 0 })} €
+          </span>
+        </div>
       ))}
     </div>
   );
 }
 
+function fmt(v: number) {
+  return v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(Math.round(v));
+}
+
 export function MonthlyTrendChart({ data }: MonthlyTrendChartProps) {
+  if (data.length === 0) {
+    return (
+      <div className="py-10 text-center text-sm text-fg-subtle">
+        Aucune donnée disponible pour le moment.
+      </div>
+    );
+  }
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: 0.3 }}
-      className="bg-dark-card border border-dark-border rounded-xl p-6"
-    >
-      <div>
-        <h2 className="text-sm font-semibold text-white">Tendance mensuelle</h2>
-        <p className="text-xs text-gray-500 mt-1">
-          Revenus vs Dépenses des 12 derniers mois
-        </p>
+    <div>
+      <div className="flex items-center gap-5 mb-4">
+        <div className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+          <span className="text-xs text-fg-secondary">Revenus</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-red-500" />
+          <span className="text-xs text-fg-secondary">Dépenses</span>
+        </div>
       </div>
 
-      {data.length === 0 ? (
-        <div className="py-12 text-center text-sm text-gray-500">
-          Aucune donnée disponible pour le moment.
-        </div>
-      ) : (
-        <div className="mt-6 w-full h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart
-              data={data}
-              margin={{ top: 20, right: 30, left: 0, bottom: 5 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-              <XAxis
-                dataKey="month"
-                stroke="#9CA3AF"
-                style={{ fontSize: "12px" }}
-              />
-              <YAxis stroke="#9CA3AF" style={{ fontSize: "12px" }} />
-              <Tooltip content={<CustomTooltip />} />
-              <Legend wrapperStyle={{ fontSize: "12px", color: "#E5E7EB" }} />
-              <Line
-                type="monotone"
-                dataKey="income"
-                stroke="#10B981"
-                strokeWidth={2}
-                dot={{ fill: "#10B981", r: 4 }}
-                activeDot={{ r: 6 }}
-                name="Revenus"
-                isAnimationActive={true}
-              />
-              <Line
-                type="monotone"
-                dataKey="expense"
-                stroke="#DC2626"
-                strokeWidth={2}
-                dot={{ fill: "#DC2626", r: 4 }}
-                activeDot={{ r: 6 }}
-                name="Dépenses"
-                isAnimationActive={true}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-    </motion.div>
+      <ResponsiveContainer width="100%" height={220}>
+        <AreaChart data={data} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
+          <defs>
+            <linearGradient id="gIncome" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%"  stopColor="#10B981" stopOpacity={0.25} />
+              <stop offset="95%" stopColor="#10B981" stopOpacity={0}    />
+            </linearGradient>
+            <linearGradient id="gExpense" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%"  stopColor="#EF4444" stopOpacity={0.22} />
+              <stop offset="95%" stopColor="#EF4444" stopOpacity={0}    />
+            </linearGradient>
+          </defs>
+
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--recharts-grid)" vertical={false} />
+
+          <XAxis
+            dataKey="month"
+            stroke="var(--recharts-axis)"
+            tick={{ fontSize: 11, fill: "var(--recharts-axis)" }}
+            tickLine={false}
+            axisLine={false}
+            interval={2}
+          />
+          <YAxis
+            stroke="var(--recharts-axis)"
+            tick={{ fontSize: 11, fill: "var(--recharts-axis)" }}
+            tickLine={false}
+            axisLine={false}
+            tickFormatter={fmt}
+            width={36}
+          />
+
+          <Tooltip content={<CustomTooltip />} cursor={{ stroke: "var(--recharts-grid)", strokeWidth: 1 }} />
+
+          <Area
+            type="monotone"
+            dataKey="income"
+            name="Revenus"
+            stroke="#10B981"
+            strokeWidth={2}
+            fill="url(#gIncome)"
+            dot={false}
+            activeDot={{ r: 4, fill: "#10B981", strokeWidth: 0 }}
+          />
+          <Area
+            type="monotone"
+            dataKey="expense"
+            name="Dépenses"
+            stroke="#EF4444"
+            strokeWidth={2}
+            fill="url(#gExpense)"
+            dot={false}
+            activeDot={{ r: 4, fill: "#EF4444", strokeWidth: 0 }}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
   );
 }
