@@ -1,26 +1,20 @@
 import { motion } from "framer-motion";
 import {
-  CalendarIcon,
-  ChevronRightIcon,
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  CheckIcon,
   PencilIcon,
-  RefreshCw,
+  PiggyBankIcon,
+  RefreshCwIcon,
   SaveIcon,
-  Settings,
+  TrendingDownIcon,
+  TrendingUpIcon,
   XIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Legend,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import { BudgetComparisonChart } from "../components/BudgetComparisonChart";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DailySpendingChart } from "../components/DailySpendingChart";
+import { MobileSpendingPie } from "../components/MobileSpendingPie";
+import { NotificationBell } from "../components/NotificationBell";
 import { Sidebar } from "../components/Sidebar";
 import { supabase } from "../lib/supabaseClient";
 import type { Category } from "../transaction";
@@ -52,1485 +46,835 @@ interface BudgetTransaction {
   date: string;
 }
 
-const chartPalette = [
-  // Bleus
-  "#3B82F6", // Bleu vif
-  "#0EA5E9", // Sky blue
-  "#06B6D4", // Cyan
-  "#0891B2", // Cyan foncé
-  "#0369A1", // Bleu foncé
-
-  // Verts
-  "#10B981", // Vert émeraude
-  "#84CC16", // Lime
-  "#14B8A6", // Teal
-  "#059669", // Vert foncé
-  "#16A34A", // Vert classique
-
-  // Rouges/Roses
-  "#EF4444", // Rouge vif
-  "#EC4899", // Rose
-  "#F43F5E", // Rose foncé
-  "#DC2626", // Rouge foncé
-  "#BE123C", // Bordeaux
-
-  // Oranges/Jaunes
-  "#F59E0B", // Orange doré
-  "#F97316", // Orange vif
-  "#FBBF24", // Ambre
-  "#FCD34D", // Or clair
-  "#F59E0B", // Orange
-
-  // Violets/Indigos
-  "#8B5CF6", // Violet
-  "#A855F7", // Violet vif
-  "#D946EF", // Rose magenta
-  "#7C3AED", // Indigo
-  "#6366F1", // Indigo bleu
-
-  // Teintes additionnelles
-  "#14B8A6", // Turquoise
-  "#06B6D4", // Cyan light
-  "#0D9488", // Teal foncé
-  "#059669", // Vert émeraude foncé
-  "#10B981", // Vert bright
-  "#34D399", // Vert clair
-  "#6EE7B7", // Vert menthe
-];
-
-function formatAmountValue(value: number) {
-  return value.toLocaleString("fr-FR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+interface SavingsBudgetItem {
+  id: string;
+  source_type: "goal" | "placement";
+  source_id: string;
+  month: string;
+  planned_amount: number;
 }
 
-export function BudgetPage({
-  onLogout,
-  userId,
-  activeItem,
-  onNavigate,
-}: BudgetPageProps) {
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [budgets, setBudgets] = useState<BudgetRow[]>([]);
-  const [transactions, setTransactions] = useState<BudgetTransaction[]>([]);
-  const [draftLimits, setDraftLimits] = useState<Record<string, string>>({});
-  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(
-    null,
-  );
-  const [isLoading, setIsLoading] = useState(true);
-  const [actionError, setActionError] = useState("");
-  const [savingCategoryId, setSavingCategoryId] = useState<string | null>(null);
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [isLimitsOpen, setIsLimitsOpen] = useState(false);
-  const [isRecurringOpen, setIsRecurringOpen] = useState(false);
-  const [recurringBudgets, setRecurringBudgets] = useState<RecurringBudget[]>(
-    [],
-  );
-  const [userProfile, setUserProfile] = useState<{
-    firstName: string;
-    lastName: string;
-    email: string;
-  } | null>(null);
-
-  const monthOptions = useMemo(
-    () => [
-      "Janvier",
-      "Fevrier",
-      "Mars",
-      "Avril",
-      "Mai",
-      "Juin",
-      "Juillet",
-      "Aout",
-      "Septembre",
-      "Octobre",
-      "Novembre",
-      "Decembre",
-    ],
-    [],
-  );
-
-  const initialMonthStart = useMemo(() => {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1);
-  }, []);
-
-  const [activeMonthStart, setActiveMonthStart] = useState(initialMonthStart);
-  const [draftMonth, setDraftMonth] = useState(
-    initialMonthStart.getMonth() + 1,
-  );
-  const [draftYear, setDraftYear] = useState(initialMonthStart.getFullYear());
-
-  const yearOptions = useMemo(() => {
-    const currentYear = initialMonthStart.getFullYear();
-    return [currentYear - 2, currentYear - 1, currentYear, currentYear + 1];
-  }, [initialMonthStart]);
-
-  const activeMonthKey = useMemo(
-    () => activeMonthStart.toISOString().split("T")[0],
-    [activeMonthStart],
-  );
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadData() {
-      setIsLoading(true);
-
-      const { data: user } = await supabase.auth.getUser();
-      if (user.user?.email) {
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("first_name, last_name")
-          .eq("id", userId)
-          .single();
-
-        if (error) {
-          console.error("Failed to load profile", error);
-        } else if (data && isMounted) {
-          setUserProfile({
-            firstName: data.first_name || "Utilisateur",
-            lastName: data.last_name || "",
-            email: user.user.email,
-          });
-        }
-      }
-
-      const { data: categoriesData, error: categoriesError } = await supabase
-        .from("categories")
-        .select("id, name, type")
-        .order("name");
-
-      if (categoriesError) {
-        console.error("Failed to load categories", categoriesError);
-      } else if (isMounted) {
-        setCategories((categoriesData ?? []) as Category[]);
-      }
-
-      const { data: budgetsData, error: budgetsError } = await supabase
-        .from("budgets")
-        .select("id, category_id, month, planned_amount")
-        .eq("user_id", userId)
-        .eq("month", activeMonthKey);
-
-      if (budgetsError) {
-        console.error("Failed to load budgets", budgetsError);
-      } else if (isMounted) {
-        setBudgets((budgetsData ?? []) as BudgetRow[]);
-      }
-
-      const { data: transactionsData, error: transactionsError } =
-        await supabase
-          .from("transactions")
-          .select("amount, type, date, category_id")
-          .lte("date", new Date().toISOString().split("T")[0])
-          .order("date", { ascending: false });
-
-      if (transactionsError) {
-        console.error("Failed to load transactions", transactionsError);
-      } else if (isMounted) {
-        const mapped = (transactionsData ?? []).map((row) => ({
-          category_id: row.category_id as string,
-          amount: Number(row.amount ?? 0),
-          type: row.type as "income" | "expense",
-          date: row.date as string,
-        }));
-
-        setTransactions(mapped);
-      }
-
-      const { data: recurringData, error: recurringError } = await supabase
-        .from("recurring_budgets")
-        .select("id, category_id, amount")
-        .eq("user_id", userId);
-
-      if (recurringError) {
-        console.error("Failed to load recurring budgets", recurringError);
-      } else if (isMounted) {
-        setRecurringBudgets((recurringData ?? []) as RecurringBudget[]);
-
-        // Si on est dans le mois actuel, créer automatiquement les budgets et transactions du mois suivant
-        const now = new Date();
-        const currentMonthStart = new Date(
-          now.getFullYear(),
-          now.getMonth(),
-          1,
-        );
-        const isCurrentMonth =
-          activeMonthStart.getFullYear() === currentMonthStart.getFullYear() &&
-          activeMonthStart.getMonth() === currentMonthStart.getMonth();
-
-        if (isCurrentMonth && recurringData && recurringData.length > 0) {
-          const today = new Date();
-          const nextMonthMonth = today.getMonth() + 2;
-          const nextMonthYear =
-            nextMonthMonth > 12 ? today.getFullYear() + 1 : today.getFullYear();
-          const normalizedMonth =
-            nextMonthMonth > 12 ? nextMonthMonth - 12 : nextMonthMonth;
-          const nextMonthDateStr = `${nextMonthYear}-${String(normalizedMonth).padStart(2, "0")}-01`;
-
-          // Calculer le mois d'après pour la vérification
-          const monthAfter = normalizedMonth + 1;
-          const yearAfter = monthAfter > 12 ? nextMonthYear + 1 : nextMonthYear;
-          const normalizedMonthAfter = monthAfter > 12 ? 1 : monthAfter;
-          const monthAfterKey = `${yearAfter}-${String(normalizedMonthAfter).padStart(2, "0")}-01`;
-
-          for (const recurring of recurringData as RecurringBudget[]) {
-            // Créer le budget pour le mois suivant si inexistant
-            const { data: existingBudget } = await supabase
-              .from("budgets")
-              .select("id")
-              .eq("user_id", userId)
-              .eq("category_id", recurring.category_id)
-              .eq("month", nextMonthDateStr)
-              .maybeSingle();
-
-            if (!existingBudget) {
-              await supabase.from("budgets").insert({
-                user_id: userId,
-                category_id: recurring.category_id,
-                month: nextMonthDateStr,
-                planned_amount: recurring.amount,
-              });
-            }
-
-            // Créer la transaction pour le mois suivant si inexistante
-            const { data: existingTx } = await supabase
-              .from("transactions")
-              .select("id")
-              .eq("user_id", userId)
-              .eq("category_id", recurring.category_id)
-              .gte("date", nextMonthDateStr)
-              .lt("date", monthAfterKey)
-              .maybeSingle();
-
-            if (!existingTx) {
-              await supabase.from("transactions").insert({
-                user_id: userId,
-                category_id: recurring.category_id,
-                amount: recurring.amount,
-                type: "expense",
-                date: nextMonthDateStr,
-                note: "Dépense récurrente",
-              });
-            }
-          }
-        }
-      }
-
-      if (isMounted) {
-        setIsLoading(false);
-      }
-    }
-
-    void loadData();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [userId, activeMonthKey]);
-
-  const expenseCategories = useMemo(
-    () => categories.filter((category) => category.type === "expense"),
-    [categories],
-  );
-
-  const budgetsByCategory = useMemo(() => {
-    return budgets
-      .filter((budget) => budget.month === activeMonthKey)
-      .reduce(
-        (acc, budget) => {
-          acc[budget.category_id] = budget;
-          return acc;
-        },
-        {} as Record<string, BudgetRow>,
-      );
-  }, [budgets, activeMonthKey]);
-
-  useEffect(() => {
-    setDraftLimits((prev) => {
-      const next = { ...prev };
-      expenseCategories.forEach((category) => {
-        if (next[category.id] === undefined) {
-          const existing = budgetsByCategory[category.id];
-          next[category.id] = existing
-            ? existing.planned_amount.toString()
-            : "";
-        }
-      });
-      return next;
-    });
-  }, [expenseCategories, budgetsByCategory]);
-
-  const activeMonthTransactions = useMemo(() => {
-    return transactions.filter((tx) => {
-      const date = new Date(tx.date);
-      return (
-        date.getFullYear() === activeMonthStart.getFullYear() &&
-        date.getMonth() === activeMonthStart.getMonth()
-      );
-    });
-  }, [transactions, activeMonthStart]);
-
-  const lastSixMonthKeys = useMemo(() => {
-    const keys: string[] = [];
-    for (let i = 1; i <= 6; i += 1) {
-      const date = new Date(
-        activeMonthStart.getFullYear(),
-        activeMonthStart.getMonth() - i,
-        1,
-      );
-      keys.push(date.toISOString().split("T")[0]);
-    }
-    return keys;
-  }, [activeMonthStart]);
-
-  const activeMonthIncome = useMemo(() => {
-    return activeMonthTransactions
-      .filter((tx) => tx.type === "income")
-      .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-  }, [activeMonthTransactions]);
-
-  const activeMonthSpentByCategory = useMemo(() => {
-    return activeMonthTransactions.reduce(
-      (acc, tx) => {
-        if (tx.type !== "expense") return acc;
-        acc[tx.category_id] = (acc[tx.category_id] ?? 0) + Math.abs(tx.amount);
-        return acc;
-      },
-      {} as Record<string, number>,
-    );
-  }, [activeMonthTransactions]);
-
-  const avgSixMonthsSpentByCategory = useMemo(() => {
-    const totals: Record<string, number> = {};
-    const monthsByCategory: Record<string, Set<string>> = {};
-
-    transactions.forEach((tx) => {
-      if (tx.type !== "expense") return;
-      const date = new Date(tx.date);
-      const key = new Date(date.getFullYear(), date.getMonth(), 1)
-        .toISOString()
-        .split("T")[0];
-      if (!lastSixMonthKeys.includes(key)) return;
-
-      totals[tx.category_id] =
-        (totals[tx.category_id] ?? 0) + Math.abs(tx.amount);
-
-      if (!monthsByCategory[tx.category_id]) {
-        monthsByCategory[tx.category_id] = new Set<string>();
-      }
-      monthsByCategory[tx.category_id].add(key);
-    });
-
-    return Object.entries(totals).reduce(
-      (acc, [categoryId, total]) => {
-        const monthCount = monthsByCategory[categoryId]?.size ?? 0;
-        if (monthCount > 0) {
-          acc[categoryId] = total / monthCount;
-        }
-        return acc;
-      },
-      {} as Record<string, number>,
-    );
-  }, [transactions, lastSixMonthKeys]);
-
-  const totalBudgetLimit = useMemo(() => {
-    return expenseCategories.reduce((sum, category) => {
-      const budget = budgetsByCategory[category.id];
-      return sum + (budget?.planned_amount ?? 0);
-    }, 0);
-  }, [expenseCategories, budgetsByCategory]);
-
-  const budgetChartData = useMemo(() => {
-    // Filtrer d'abord les catégories avec budget > 0
-    const categoriesWithBudget = expenseCategories
-      .filter((category) => {
-        const budget = budgetsByCategory[category.id];
-        return (budget?.planned_amount ?? 0) > 0;
-      })
-      // Assigner les couleurs APRÈS le filtre pour éviter les doublons
-      .map((category, index) => {
-        const budget = budgetsByCategory[category.id];
-        const value = budget?.planned_amount ?? 0;
-        return {
-          name: category.name,
-          value,
-          color: chartPalette[index % chartPalette.length],
-        };
-      });
-
-    const totalBudget = activeMonthIncome;
-    const allocatedBudget = categoriesWithBudget.reduce(
-      (sum, item) => sum + item.value,
-      0,
-    );
-    const remainingBudget = Math.max(0, totalBudget - allocatedBudget);
-
-    // Structure pour stacked bar
-    const stackedData: Record<string, string | number> = {
-      name: "Répartition budgétaire",
-    };
-
-    categoriesWithBudget.forEach((item) => {
-      stackedData[item.name] = item.value;
-    });
-
-    if (remainingBudget > 0) {
-      stackedData["Budget non alloué"] = remainingBudget;
-    }
-
-    return {
-      data: [stackedData],
-      categories: categoriesWithBudget,
-      remainingBudget,
-      totalBudget,
-    };
-  }, [expenseCategories, budgetsByCategory, activeMonthIncome]);
-
-  const budgetComparisonData = useMemo(() => {
-    return expenseCategories
-      .map((category) => {
-        const budget = budgetsByCategory[category.id];
-        const spent = activeMonthSpentByCategory[category.id] ?? 0;
-        return {
-          name: category.name,
-          limit: budget?.planned_amount ?? 0,
-          spent,
-        };
-      })
-      .filter((item) => item.limit > 0 || item.spent > 0);
-  }, [expenseCategories, budgetsByCategory, activeMonthSpentByCategory]);
-
-  const dailySpendingData = useMemo(() => {
-    const dailyTotals: Record<string, number> = {};
-    const currentMonthStart = activeMonthStart;
-    const currentMonthEnd = new Date(
-      currentMonthStart.getFullYear(),
-      currentMonthStart.getMonth() + 1,
-      0,
-    );
-
-    for (let d = 1; d <= currentMonthEnd.getDate(); d++) {
-      const key = `${d}`;
-      dailyTotals[key] = 0;
-    }
-
-    transactions.forEach((tx) => {
-      if (tx.type !== "expense") return;
-      const txDate = new Date(tx.date);
-      const txYear = txDate.getFullYear();
-      const txMonth = txDate.getMonth();
-
-      if (
-        txYear !== currentMonthStart.getFullYear() ||
-        txMonth !== currentMonthStart.getMonth()
-      ) {
-        return;
-      }
-
-      const day = txDate.getDate().toString();
-      dailyTotals[day] = (dailyTotals[day] ?? 0) + Math.abs(tx.amount);
-    });
-
-    return Object.entries(dailyTotals).map(([day, spent]) => ({
-      day,
-      spent,
-    }));
-  }, [transactions, activeMonthStart]);
-
-  const formatAmount = formatAmountValue;
-
-  async function handleSaveBudget(categoryId: string) {
-    setActionError("");
-    const rawValue = draftLimits[categoryId];
-    const amountValue = Number(rawValue);
-
-    if (!rawValue || isNaN(amountValue) || amountValue <= 0) {
-      setActionError("Le budget doit etre superieur a 0.");
-      return;
-    }
-
-    setSavingCategoryId(categoryId);
-
-    const existing = budgetsByCategory[categoryId];
-    if (existing) {
-      const { data, error } = await supabase
-        .from("budgets")
-        .update({ planned_amount: amountValue })
-        .eq("id", existing.id)
-        .select("id, category_id, month, planned_amount")
-        .single();
-
-      if (error) {
-        console.error("Failed to update budget", error);
-        setActionError("Impossible de mettre a jour ce budget.");
-        setSavingCategoryId(null);
-        return;
-      }
-
-      setBudgets((prev) =>
-        prev.map((budget) =>
-          budget.id === existing.id ? (data as BudgetRow) : budget,
-        ),
-      );
-    } else {
-      const { data, error } = await supabase
-        .from("budgets")
-        .insert({
-          user_id: userId,
-          category_id: categoryId,
-          month: activeMonthKey,
-          planned_amount: amountValue,
-        })
-        .select("id, category_id, month, planned_amount")
-        .single();
-
-      if (error) {
-        console.error("Failed to create budget", error);
-        setActionError("Impossible d'ajouter ce budget.");
-        setSavingCategoryId(null);
-        return;
-      }
-
-      if (data) {
-        setBudgets((prev) => [data as BudgetRow, ...prev]);
-      }
-    }
-
-    setEditingCategoryId(null);
-    setSavingCategoryId(null);
+interface SimpleSavingsItem {
+  id: string;
+  name: string;
+  emoji: string;
+  badge?: string;
+  sourceType: "goal" | "placement";
+}
+
+const pieColors = [
+  "#4F7EFF", "#2B5CE8", "#7BA0FF", "#6190FF",
+  "#1A45C4", "#3B6AE0", "#5C8AFF", "#8FB0FF",
+];
+
+const PLACEMENT_LABELS: Record<string, string> = {
+  livret: "Livret", ldds: "LDDS", pel: "PEL",
+  assurance_vie: "Ass. vie", pea: "PEA",
+  actions: "Actions", crypto: "Crypto", autre: "Autre",
+};
+
+function fmt(v: number) {
+  return v.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function fmtShort(v: number) {
+  return v.toLocaleString("fr-FR", { maximumFractionDigits: 0 });
+}
+
+function getBarColorHex(ratio: number, isExact = false): string {
+  if (isExact) return "#6366f1";
+  if (ratio >= 0.9) return "#ef4444";
+  if (ratio >= 0.7) return "#f59e0b";
+  return "#10b981";
+}
+
+function getBarColor(ratio: number, isExact = false): string {
+  if (isExact) return "bg-indigo-500";
+  if (ratio >= 0.9) return "bg-red-500";
+  if (ratio >= 0.7) return "bg-warning";
+  return "bg-success";
+}
+
+function addMonthsToDate(d: Date, n: number): Date {
+  return new Date(d.getFullYear(), d.getMonth() + n, 1);
+}
+
+function formatMonthYear(d: Date): string {
+  const label = d.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+interface CategoryRowProps {
+  cat: Category;
+  budget?: BudgetRow;
+  spent: number;
+  isRecurring: boolean;
+  isCurrentMonth: boolean;
+  onSave: (catId: string, value: string) => Promise<void>;
+  onToggleRecurring: (catId: string) => Promise<void>;
+  isSavingId: string | null;
+}
+
+function CategoryRow({ cat, budget, spent, isRecurring, isCurrentMonth, onSave, onToggleRecurring, isSavingId }: CategoryRowProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState(budget?.planned_amount?.toString() ?? "");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const limit = budget?.planned_amount ?? 0;
+  const ratio = limit > 0 ? Math.min(spent / limit, 1) : 0;
+  const isOver = spent > limit && limit > 0;
+  const isExact = limit > 0 && Math.abs(spent - limit) < 0.005;
+  const isSaving = isSavingId === cat.id;
+
+  function handleEdit() {
+    setDraft(budget?.planned_amount?.toString() ?? "");
+    setIsEditing(true);
+    setTimeout(() => inputRef.current?.focus(), 50);
   }
 
-  function handleCancelEdit(categoryId: string) {
-    const existing = budgetsByCategory[categoryId];
-    setDraftLimits((prev) => ({
-      ...prev,
-      [categoryId]: existing ? existing.planned_amount.toString() : "",
-    }));
-    setEditingCategoryId(null);
+  function handleCancel() {
+    setDraft(budget?.planned_amount?.toString() ?? "");
+    setIsEditing(false);
   }
 
-  async function handleToggleRecurring(categoryId: string) {
-    // Vérifier qu'on est dans le mois actuel (pas un mois futur)
-    const now = new Date();
-    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-
-    if (
-      activeMonthStart.getFullYear() !== currentMonthStart.getFullYear() ||
-      activeMonthStart.getMonth() !== currentMonthStart.getMonth()
-    ) {
-      setActionError(
-        "Tu ne peux cocher une récurrence que pour le mois actuel. Cela évite les boucles infinies de pré-enregistrements.",
-      );
-      return;
-    }
-
-    const existing = recurringBudgets.find((r) => r.category_id === categoryId);
-
-    if (existing) {
-      // Supprimer la récurrence
-      const { error } = await supabase
-        .from("recurring_budgets")
-        .delete()
-        .eq("id", existing.id);
-
-      if (error) {
-        console.error("Failed to delete recurring budget", error);
-        setActionError("Impossible de supprimer cette recurrence.");
-        return;
-      }
-
-      // Supprimer aussi la transaction et le budget pré-enregistrés du mois suivant
-      const today = new Date();
-      const nextMonthMonth = today.getMonth() + 2;
-      const nextMonthYear =
-        nextMonthMonth > 12 ? today.getFullYear() + 1 : today.getFullYear();
-      const normalizedMonth =
-        nextMonthMonth > 12 ? nextMonthMonth - 12 : nextMonthMonth;
-      const nextMonthPrefix = `${nextMonthYear}-${String(normalizedMonth).padStart(2, "0")}`;
-      const nextMonthKey = `${nextMonthPrefix}-01`;
-
-      // Calculer le mois d'après pour la borne supérieure
-      const monthAfter = normalizedMonth + 1;
-      const yearAfter = monthAfter > 12 ? nextMonthYear + 1 : nextMonthYear;
-      const normalizedMonthAfter = monthAfter > 12 ? 1 : monthAfter;
-      const monthAfterKey = `${yearAfter}-${String(normalizedMonthAfter).padStart(2, "0")}-01`;
-
-      // Supprimer toutes les transactions du mois suivant pour cette catégorie
-      const { error: deleteError } = await supabase
-        .from("transactions")
-        .delete()
-        .eq("user_id", userId)
-        .eq("category_id", categoryId)
-        .gte("date", nextMonthKey)
-        .lt("date", monthAfterKey);
-
-      if (deleteError) {
-        console.error("Erreur de suppression transaction:", deleteError);
-      }
-
-      // Supprimer le budget du mois suivant
-      const { error: budgetDeleteError } = await supabase
-        .from("budgets")
-        .delete()
-        .eq("user_id", userId)
-        .eq("category_id", categoryId)
-        .eq("month", nextMonthKey);
-
-      if (budgetDeleteError) {
-        console.error("Erreur de suppression budget:", budgetDeleteError);
-      }
-
-      // Recharger les transactions pour mettre à jour l'UI
-      const { data: updatedTransactions } = await supabase
-        .from("transactions")
-        .select("amount, type, date, category_id")
-        .order("date", { ascending: false });
-
-      if (updatedTransactions) {
-        const mapped = updatedTransactions.map((row) => ({
-          category_id: row.category_id as string,
-          amount: Number(row.amount ?? 0),
-          type: row.type as "income" | "expense",
-          date: row.date as string,
-        }));
-        setTransactions(mapped);
-      }
-
-      setRecurringBudgets((prev) => prev.filter((r) => r.id !== existing.id));
-    } else {
-      // Ajouter la récurrence avec le montant actuel du budget
-      const currentBudget = budgetsByCategory[categoryId];
-      const amount = currentBudget?.planned_amount ?? 0;
-
-      if (amount === 0) {
-        setActionError("Definis d'abord une limite pour cette categorie.");
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from("recurring_budgets")
-        .insert({
-          user_id: userId,
-          category_id: categoryId,
-          amount: amount,
-        })
-        .select("id, category_id, amount")
-        .single();
-
-      if (error) {
-        console.error("Failed to create recurring budget", error);
-        setActionError("Impossible d'ajouter cette recurrence.");
-        return;
-      }
-
-      if (data) {
-        // Ajouter à la liste des récurrences
-        setRecurringBudgets((prev) => [data as RecurringBudget, ...prev]);
-
-        // Créer immédiatement une transaction pour le mois suivant
-        const today = new Date();
-        const nextMonthMonth = today.getMonth() + 2;
-        const nextMonthYear =
-          nextMonthMonth > 12 ? today.getFullYear() + 1 : today.getFullYear();
-        const normalizedMonth =
-          nextMonthMonth > 12 ? nextMonthMonth - 12 : nextMonthMonth;
-        const nextMonthDateStr = `${nextMonthYear}-${String(normalizedMonth).padStart(2, "0")}-01`;
-
-        // Calculer le mois d'après pour la vérification
-        const monthAfter = normalizedMonth + 1;
-        const yearAfter = monthAfter > 12 ? nextMonthYear + 1 : nextMonthYear;
-        const normalizedMonthAfter = monthAfter > 12 ? 1 : monthAfter;
-        const monthAfterKey = `${yearAfter}-${String(normalizedMonthAfter).padStart(2, "0")}-01`;
-
-        // Créer le budget pour le mois suivant
-        const nextMonthKey = nextMonthDateStr;
-
-        const { data: existingBudget } = await supabase
-          .from("budgets")
-          .select("id")
-          .eq("user_id", userId)
-          .eq("category_id", categoryId)
-          .eq("month", nextMonthKey)
-          .maybeSingle();
-
-        if (!existingBudget) {
-          await supabase.from("budgets").insert({
-            user_id: userId,
-            category_id: categoryId,
-            month: nextMonthKey,
-            planned_amount: amount,
-          });
-        }
-
-        // Vérifier directement dans la DB si une transaction existe déjà avec la même catégorie et date
-        const { data: existingTx } = await supabase
-          .from("transactions")
-          .select("id")
-          .eq("user_id", userId)
-          .eq("category_id", categoryId)
-          .gte("date", nextMonthKey)
-          .lt("date", monthAfterKey)
-          .maybeSingle();
-
-        if (!existingTx) {
-          await supabase.from("transactions").insert({
-            user_id: userId,
-            category_id: categoryId,
-            amount: amount,
-            type: "expense",
-            date: nextMonthDateStr,
-            note: "Dépense récurrente",
-          });
-
-          // Recharger les transactions pour mettre à jour l'UI
-          const { data: updatedTransactions } = await supabase
-            .from("transactions")
-            .select("amount, type, date, category_id")
-            .order("date", { ascending: false });
-
-          if (updatedTransactions) {
-            const mapped = updatedTransactions.map((row) => ({
-              category_id: row.category_id as string,
-              amount: Number(row.amount ?? 0),
-              type: row.type as "income" | "expense",
-              date: row.date as string,
-            }));
-            setTransactions(mapped);
-          }
-        }
-      }
-    }
+  async function handleSave() {
+    await onSave(cat.id, draft);
+    setIsEditing(false);
   }
 
-  const today = new Date().toLocaleDateString("fr-FR", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-
-  const topProgress =
-    activeMonthIncome > 0
-      ? Math.min(totalBudgetLimit / activeMonthIncome, 1)
-      : 0;
-
-  function handleApplyMonthFilter() {
-    if (!draftYear || !draftMonth) return;
-    setActiveMonthStart(new Date(draftYear, draftMonth - 1, 1));
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Enter") void handleSave();
+    if (e.key === "Escape") handleCancel();
   }
 
   return (
-    <div className="min-h-screen w-full bg-dark">
-      <Sidebar
-        onLogout={onLogout}
-        activeItem={activeItem}
-        onNavigate={onNavigate}
-        userProfile={userProfile}
-      />
-
-      <main className="lg:ml-64">
-        <header className="sticky top-0 z-20 bg-dark/80 backdrop-blur-lg border-b border-dark-border">
-          <div className="flex items-start justify-between gap-3 px-6 py-4 lg:px-8 sm:items-center">
-            <div className="ml-12 lg:ml-0">
-              <motion.h1
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-                className="text-lg font-semibold text-white"
-              >
-                Budget
-              </motion.h1>
-              <div className="flex items-center gap-1.5 mt-0.5 whitespace-nowrap">
-                <CalendarIcon className="w-3.5 h-3.5 text-gray-500" />
-                <p className="text-xs text-gray-500 capitalize">{today}</p>
-              </div>
+    <div className={`group rounded-xl transition-all duration-150 ${isEditing ? "bg-accent/5 border border-accent/25 p-3" : "hover:bg-surface-elevated border border-transparent p-3"}`}>
+      <div className="flex items-center gap-2 min-w-0">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2 min-w-0">
+            <span className="text-sm font-medium text-fg truncate">{cat.name}</span>
+            {!isEditing && limit > 0 && (
+              <span className={`text-xs tabular-nums flex-shrink-0 ${isExact ? "text-indigo-400 font-semibold" : isOver ? "text-red-400 font-semibold" : "text-fg-subtle"}`}>
+                {fmtShort(spent)} / {fmtShort(limit)} €
+              </span>
+            )}
+          </div>
+          {!isEditing && limit > 0 && (
+            <div className="mt-1.5 h-1.5 rounded-full bg-surface border border-surface-border overflow-hidden">
+              <div style={{ width: `${Math.round(ratio * 100)}%`, backgroundColor: getBarColorHex(ratio, isExact) }} className="h-full rounded-full transition-all duration-500" />
             </div>
-            <div className="flex w-full items-center justify-end sm:w-auto">
-              <button
-                type="button"
-                onClick={() => setIsFilterOpen(true)}
-                className="sm:hidden inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-dark-border text-gray-300 text-xs font-semibold hover:bg-dark-hover transition-colors"
-              >
-                Filtre
+          )}
+          {!isEditing && limit === 0 && (
+            <p className="text-[11px] text-fg-disabled mt-0.5">Aucune limite définie</p>
+          )}
+        </div>
+        {!isEditing && (
+          <button onClick={handleEdit} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-fg-subtle hover:text-fg hover:bg-surface-hover transition-all flex-shrink-0" aria-label="Modifier">
+            <PencilIcon className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+      {isEditing && (
+        <div className="mt-2.5 space-y-2">
+          <div className="flex items-center gap-2">
+            <input ref={inputRef} type="number" min="0" step="0.01" value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={handleKeyDown} placeholder="Montant mensuel"
+              className="flex-1 text-sm px-3 py-2 rounded-lg bg-surface border border-surface-border text-fg focus:border-accent/60 focus:ring-2 focus:ring-accent/20 outline-none" />
+            <span className="text-xs text-fg-subtle flex-shrink-0">€</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => void handleSave()} disabled={isSaving || !draft}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-accent text-accent-fg text-xs font-semibold hover:bg-accent-light transition-colors disabled:opacity-50">
+              {isSaving ? <RefreshCwIcon className="w-3.5 h-3.5 animate-spin" /> : <SaveIcon className="w-3.5 h-3.5" />}
+              Enregistrer
+            </button>
+            {budget && (
+              <button onClick={handleCancel} className="p-2 rounded-lg border border-surface-border text-fg-subtle hover:text-fg hover:bg-surface-hover transition-colors">
+                <XIcon className="w-4 h-4" />
               </button>
-              <div className="hidden sm:flex sm:flex-row sm:items-center sm:gap-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <label className="text-xs text-gray-500">Mois</label>
-                  <select
-                    value={draftMonth}
-                    onChange={(event) =>
-                      setDraftMonth(Number(event.target.value))
-                    }
-                    className="bg-dark border border-dark-border rounded-lg px-3 py-2 text-xs text-gray-200 focus:outline-none focus:ring-2 focus:ring-gold/40"
-                  >
-                    {monthOptions.map((label, index) => (
-                      <option key={label} value={index + 1}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <label className="text-xs text-gray-500">Annee</label>
-                  <select
-                    value={draftYear}
-                    onChange={(event) =>
-                      setDraftYear(Number(event.target.value))
-                    }
-                    className="bg-dark border border-dark-border rounded-lg px-3 py-2 text-xs text-gray-200 focus:outline-none focus:ring-2 focus:ring-gold/40"
-                  >
-                    {yearOptions.map((year) => (
-                      <option key={year} value={year}>
-                        {year}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleApplyMonthFilter}
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-dark-border text-gray-300 text-xs font-semibold hover:bg-dark-hover transition-colors"
-                >
-                  Filtrer
-                </button>
-              </div>
+            )}
+            {isCurrentMonth && budget && (
+              <button onClick={() => void onToggleRecurring(cat.id)}
+                title={isRecurring ? "Désactiver la récurrence" : "Activer la récurrence mensuelle"}
+                className={`p-2 rounded-lg border transition-colors ${isRecurring ? "bg-emerald-500/12 border-emerald-500/30 text-emerald-400" : "border-surface-border text-fg-subtle hover:text-fg hover:bg-surface-hover"}`}>
+                <RefreshCwIcon className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface SavingsRowProps {
+  item: SimpleSavingsItem;
+  planned: number;
+  onSave: (sourceType: "goal" | "placement", sourceId: string, value: string) => Promise<void>;
+  isSavingKey: string | null;
+}
+
+function SavingsRow({ item, planned, onSave, isSavingKey }: SavingsRowProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState(planned > 0 ? String(planned) : "");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const rowKey = `${item.sourceType}-${item.id}`;
+  const isSaving = isSavingKey === rowKey;
+
+  function handleEdit() {
+    setDraft(planned > 0 ? String(planned) : "");
+    setIsEditing(true);
+    setTimeout(() => inputRef.current?.focus(), 50);
+  }
+
+  async function handleSave() {
+    await onSave(item.sourceType, item.id, draft);
+    setIsEditing(false);
+  }
+
+  return (
+    <div className={`group rounded-xl transition-all duration-150 ${isEditing ? "bg-accent/5 border border-accent/25 p-3" : "hover:bg-surface-elevated border border-transparent p-3"}`}>
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="text-lg flex-shrink-0 select-none">{item.emoji}</span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-sm font-medium text-fg truncate">{item.name}</span>
+              {item.badge && (
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-surface-elevated border border-surface-border text-fg-subtle flex-shrink-0">{item.badge}</span>
+              )}
+            </div>
+            {!isEditing && (
+              <span className={`text-xs tabular-nums flex-shrink-0 font-medium ${planned > 0 ? "text-accent" : "text-fg-disabled"}`}>
+                {planned > 0 ? `${fmtShort(planned)} €` : "—"}
+              </span>
+            )}
+          </div>
+        </div>
+        {!isEditing && (
+          <button onClick={handleEdit} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-fg-subtle hover:text-fg hover:bg-surface-hover transition-all flex-shrink-0">
+            <PencilIcon className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+      {isEditing && (
+        <div className="mt-2.5 flex items-center gap-2">
+          <input ref={inputRef} type="number" min="0" step="0.01" value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") void handleSave(); if (e.key === "Escape") setIsEditing(false); }}
+            placeholder="Montant mensuel"
+            className="flex-1 text-sm px-3 py-2 rounded-lg bg-surface border border-surface-border text-fg focus:border-accent/60 focus:ring-2 focus:ring-accent/20 outline-none" />
+          <span className="text-xs text-fg-subtle">€</span>
+          <button onClick={() => void handleSave()} disabled={isSaving}
+            className="flex items-center justify-center gap-1 px-3 py-2 rounded-lg bg-accent text-accent-fg text-xs font-semibold hover:bg-accent-light transition-colors disabled:opacity-50">
+            {isSaving ? <RefreshCwIcon className="w-3.5 h-3.5 animate-spin" /> : <SaveIcon className="w-3.5 h-3.5" />}
+          </button>
+          <button onClick={() => setIsEditing(false)} className="p-2 rounded-lg border border-surface-border text-fg-subtle hover:text-fg hover:bg-surface-hover transition-colors">
+            <XIcon className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function BudgetPage({ onLogout, userId, activeItem, onNavigate }: BudgetPageProps) {
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [budgets, setBudgets] = useState<BudgetRow[]>([]);
+  const [transactions, setTransactions] = useState<BudgetTransaction[]>([]);
+  const [recurringBudgets, setRecurringBudgets] = useState<RecurringBudget[]>([]);
+  const [savingsItems, setSavingsItems] = useState<SimpleSavingsItem[]>([]);
+  const [savingsBudgetItems, setSavingsBudgetItems] = useState<SavingsBudgetItem[]>([]);
+  const [userProfile, setUserProfile] = useState<{ firstName: string; lastName: string; email: string } | null>(null);
+  const [activeMonthStart, setActiveMonthStart] = useState(() => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), 1); });
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [savingSavingsId, setSavingSavingsId] = useState<string | null>(null);
+  const [error, setError] = useState("");
+
+  const activeMonthKey = useMemo(() => activeMonthStart.toISOString().split("T")[0], [activeMonthStart]);
+
+  const isCurrentMonth = useMemo(() => {
+    const now = new Date();
+    return activeMonthStart.getFullYear() === now.getFullYear() && activeMonthStart.getMonth() === now.getMonth();
+  }, [activeMonthStart]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadAll() {
+      const { data: user } = await supabase.auth.getUser();
+      if (user.user?.email) {
+        const { data } = await supabase.from("profiles").select("first_name, last_name").eq("id", userId).single();
+        if (data && mounted) setUserProfile({ firstName: data.first_name || "Utilisateur", lastName: data.last_name || "", email: user.user.email });
+      }
+
+      const [{ data: cats }, { data: buds }, { data: txs }, { data: recs }, { data: goals }, { data: placements }, { data: savBudgets }] = await Promise.all([
+        supabase.from("categories").select("id, name, type").order("name"),
+        supabase.from("budgets").select("id, category_id, month, planned_amount").eq("user_id", userId).eq("month", activeMonthKey),
+        supabase.from("transactions").select("amount, type, date, category_id").lte("date", new Date().toISOString().split("T")[0]).order("date", { ascending: false }),
+        supabase.from("recurring_budgets").select("id, category_id, amount").eq("user_id", userId),
+        supabase.from("savings_goals").select("id, name, emoji").order("created_at", { ascending: false }),
+        supabase.from("savings_placements").select("id, name, emoji, type").order("created_at", { ascending: false }),
+        supabase.from("savings_budget_items").select("*").eq("user_id", userId).eq("month", activeMonthKey),
+      ]);
+
+      if (!mounted) return;
+      if (cats) setCategories(cats as Category[]);
+      if (buds) setBudgets(buds as BudgetRow[]);
+      if (txs) setTransactions(txs.map((r) => ({ category_id: r.category_id as string, amount: Number(r.amount ?? 0), type: r.type as "income" | "expense", date: r.date as string })));
+
+      const merged: SimpleSavingsItem[] = [
+        ...((goals ?? []) as { id: string; name: string; emoji: string }[]).map(g => ({ id: g.id, name: g.name, emoji: g.emoji, sourceType: "goal" as const })),
+        ...((placements ?? []) as { id: string; name: string; emoji: string; type: string }[]).map(p => ({ id: p.id, name: p.name, emoji: p.emoji, badge: PLACEMENT_LABELS[p.type] ?? p.type, sourceType: "placement" as const })),
+      ];
+      setSavingsItems(merged);
+      if (savBudgets) setSavingsBudgetItems(savBudgets as SavingsBudgetItem[]);
+
+      if (recs) {
+        setRecurringBudgets(recs as RecurringBudget[]);
+        if (isCurrentMonth && recs.length > 0) {
+          const today = new Date();
+          const nm = today.getMonth() + 2; const ny = nm > 12 ? today.getFullYear() + 1 : today.getFullYear(); const nn = nm > 12 ? nm - 12 : nm;
+          const nextKey = `${ny}-${String(nn).padStart(2, "0")}-01`;
+          const afterM = nn + 1; const afterY = afterM > 12 ? ny + 1 : ny;
+          const afterKey = `${afterM > 12 ? afterY : afterY}-${String(afterM > 12 ? 1 : afterM).padStart(2, "0")}-01`;
+          for (const r of recs as RecurringBudget[]) {
+            const { data: eb } = await supabase.from("budgets").select("id").eq("user_id", userId).eq("category_id", r.category_id).eq("month", nextKey).maybeSingle();
+            if (!eb) await supabase.from("budgets").insert({ user_id: userId, category_id: r.category_id, month: nextKey, planned_amount: r.amount });
+            const { data: et } = await supabase.from("transactions").select("id").eq("user_id", userId).eq("category_id", r.category_id).gte("date", nextKey).lt("date", afterKey).maybeSingle();
+            if (!et) await supabase.from("transactions").insert({ user_id: userId, category_id: r.category_id, amount: r.amount, type: "expense", date: nextKey, note: "Dépense récurrente" });
+          }
+        }
+      }
+    }
+
+    void loadAll();
+    return () => { mounted = false; };
+  }, [userId, activeMonthKey, isCurrentMonth]);
+
+  const expenseCategories = useMemo(() => categories.filter((c) => c.type === "expense"), [categories]);
+
+  const budgetsByCategory = useMemo(() => {
+    return budgets.filter((b) => b.month === activeMonthKey).reduce((acc, b) => { acc[b.category_id] = b; return acc; }, {} as Record<string, BudgetRow>);
+  }, [budgets, activeMonthKey]);
+
+  const activeMonthTx = useMemo(() => {
+    return transactions.filter((tx) => {
+      const d = new Date(tx.date);
+      return d.getFullYear() === activeMonthStart.getFullYear() && d.getMonth() === activeMonthStart.getMonth();
+    });
+  }, [transactions, activeMonthStart]);
+
+  const lastThreeMonthKeys = useMemo(() => {
+    const keys: string[] = [];
+    for (let i = 1; i <= 3; i++) keys.push(new Date(activeMonthStart.getFullYear(), activeMonthStart.getMonth() - i, 1).toISOString().split("T")[0]);
+    return keys;
+  }, [activeMonthStart]);
+
+  const activeMonthIncome = useMemo(() => activeMonthTx.filter((tx) => tx.type === "income").reduce((s, tx) => s + Math.abs(tx.amount), 0), [activeMonthTx]);
+
+  const spentByCategory = useMemo(() => {
+    return activeMonthTx.reduce((acc, tx) => {
+      if (tx.type !== "expense") return acc;
+      acc[tx.category_id] = (acc[tx.category_id] ?? 0) + Math.abs(tx.amount);
+      return acc;
+    }, {} as Record<string, number>);
+  }, [activeMonthTx]);
+
+  const avgThreeMonths = useMemo(() => {
+    const totals: Record<string, number> = {};
+    const monthsByCat: Record<string, Set<string>> = {};
+    transactions.forEach((tx) => {
+      if (tx.type !== "expense") return;
+      const key = new Date(new Date(tx.date).getFullYear(), new Date(tx.date).getMonth(), 1).toISOString().split("T")[0];
+      if (!lastThreeMonthKeys.includes(key)) return;
+      totals[tx.category_id] = (totals[tx.category_id] ?? 0) + Math.abs(tx.amount);
+      if (!monthsByCat[tx.category_id]) monthsByCat[tx.category_id] = new Set();
+      monthsByCat[tx.category_id].add(key);
+    });
+    return Object.entries(totals).reduce((acc, [id, total]) => {
+      const count = monthsByCat[id]?.size ?? 0;
+      if (count > 0) acc[id] = total / count;
+      return acc;
+    }, {} as Record<string, number>);
+  }, [transactions, lastThreeMonthKeys]);
+
+  const savingsBudgetByKey = useMemo(() => {
+    return savingsBudgetItems.reduce((acc, item) => {
+      acc[`${item.source_type}-${item.source_id}`] = item;
+      return acc;
+    }, {} as Record<string, SavingsBudgetItem>);
+  }, [savingsBudgetItems]);
+
+  const totalAllocated = useMemo(() => expenseCategories.reduce((s, c) => s + (budgetsByCategory[c.id]?.planned_amount ?? 0), 0), [expenseCategories, budgetsByCategory]);
+  const totalSpent = useMemo(() => expenseCategories.reduce((s, c) => s + (spentByCategory[c.id] ?? 0), 0), [expenseCategories, spentByCategory]);
+  const totalSavingsPlanned = useMemo(() => savingsBudgetItems.reduce((s, i) => s + i.planned_amount, 0), [savingsBudgetItems]);
+  const totalEngaged = totalAllocated + totalSavingsPlanned;
+  const reste = activeMonthIncome - totalEngaged;
+  const usageRatio = totalAllocated > 0 ? Math.min(totalSpent / totalAllocated, 1) : 0;
+
+  const dailySpendingData = useMemo(() => {
+    const totals: Record<string, number> = {};
+    const end = new Date(activeMonthStart.getFullYear(), activeMonthStart.getMonth() + 1, 0);
+    for (let d = 1; d <= end.getDate(); d++) totals[String(d)] = 0;
+    transactions.forEach((tx) => {
+      if (tx.type !== "expense") return;
+      const d = new Date(tx.date);
+      if (d.getFullYear() !== activeMonthStart.getFullYear() || d.getMonth() !== activeMonthStart.getMonth()) return;
+      totals[d.getDate().toString()] = (totals[d.getDate().toString()] ?? 0) + Math.abs(tx.amount);
+    });
+    return Object.entries(totals).map(([day, spent]) => ({ day, spent }));
+  }, [transactions, activeMonthStart]);
+
+  const pieData = useMemo(() => {
+    return expenseCategories
+      .filter((c) => (spentByCategory[c.id] ?? 0) > 0)
+      .map((c, i) => ({ name: c.name, value: spentByCategory[c.id] ?? 0, color: pieColors[i % pieColors.length] }))
+      .sort((a, b) => b.value - a.value);
+  }, [expenseCategories, spentByCategory]);
+
+  const categoriesWithBudget = expenseCategories.filter((c) => (budgetsByCategory[c.id]?.planned_amount ?? 0) > 0);
+
+  async function handleSaveBudget(catId: string, rawValue: string) {
+    setError("");
+    const amount = Number(rawValue);
+    if (!rawValue || isNaN(amount) || amount <= 0) { setError("Le montant doit être supérieur à 0."); return; }
+    setSavingId(catId);
+    const existing = budgetsByCategory[catId];
+    if (existing) {
+      const { data, error: err } = await supabase.from("budgets").update({ planned_amount: amount }).eq("id", existing.id).select("id, category_id, month, planned_amount").single();
+      if (err) { setError("Impossible de mettre à jour ce budget."); } else { setBudgets((p) => p.map((b) => b.id === existing.id ? (data as BudgetRow) : b)); }
+    } else {
+      const { data, error: err } = await supabase.from("budgets").insert({ user_id: userId, category_id: catId, month: activeMonthKey, planned_amount: amount }).select("id, category_id, month, planned_amount").single();
+      if (err) { setError("Impossible d'ajouter ce budget."); } else if (data) { setBudgets((p) => [...p, data as BudgetRow]); }
+    }
+    setSavingId(null);
+  }
+
+  async function handleSaveSavingsBudget(sourceType: "goal" | "placement", sourceId: string, rawValue: string) {
+    setError("");
+    const amount = Number(rawValue);
+    if (isNaN(amount) || amount < 0) { setError("Montant invalide."); return; }
+    const key = `${sourceType}-${sourceId}`;
+    setSavingSavingsId(key);
+    const existing = savingsBudgetByKey[key];
+    try {
+      if (!rawValue || amount === 0) {
+        if (existing) {
+          await supabase.from("savings_budget_items").delete().eq("id", existing.id);
+          setSavingsBudgetItems(prev => prev.filter(i => i.id !== existing.id));
+        }
+      } else if (existing) {
+        const { data, error: err } = await supabase.from("savings_budget_items").update({ planned_amount: amount }).eq("id", existing.id).select("*").single();
+        if (err) setError("Impossible de mettre à jour.");
+        else if (data) setSavingsBudgetItems(prev => prev.map(i => i.id === existing.id ? data as SavingsBudgetItem : i));
+      } else {
+        const { data, error: err } = await supabase.from("savings_budget_items").insert({ user_id: userId, month: activeMonthKey, source_type: sourceType, source_id: sourceId, planned_amount: amount }).select("*").single();
+        if (err) setError("Impossible d'ajouter.");
+        else if (data) setSavingsBudgetItems(prev => [...prev, data as SavingsBudgetItem]);
+      }
+    } finally {
+      setSavingSavingsId(null);
+    }
+  }
+
+  async function handleToggleRecurring(catId: string) {
+    setError("");
+    const now = new Date();
+    if (!isCurrentMonth) { setError("La récurrence ne peut être modifiée que pour le mois en cours."); return; }
+    const existing = recurringBudgets.find((r) => r.category_id === catId);
+    if (existing) {
+      const { error: err } = await supabase.from("recurring_budgets").delete().eq("id", existing.id);
+      if (err) { setError("Erreur lors de la suppression."); return; }
+      const nm = now.getMonth() + 2; const ny = nm > 12 ? now.getFullYear() + 1 : now.getFullYear(); const nn = nm > 12 ? nm - 12 : nm;
+      const nextKey = `${ny}-${String(nn).padStart(2, "0")}-01`;
+      const am = nn + 1; const ay = am > 12 ? ny + 1 : ny; const an = am > 12 ? 1 : am;
+      const afterKey = `${ay}-${String(an).padStart(2, "0")}-01`;
+      await supabase.from("transactions").delete().eq("user_id", userId).eq("category_id", catId).gte("date", nextKey).lt("date", afterKey);
+      await supabase.from("budgets").delete().eq("user_id", userId).eq("category_id", catId).eq("month", nextKey);
+      const { data: updTx } = await supabase.from("transactions").select("amount, type, date, category_id").order("date", { ascending: false });
+      if (updTx) setTransactions(updTx.map((r) => ({ category_id: r.category_id as string, amount: Number(r.amount ?? 0), type: r.type as "income" | "expense", date: r.date as string })));
+      setRecurringBudgets((p) => p.filter((r) => r.id !== existing.id));
+    } else {
+      const bud = budgetsByCategory[catId];
+      if (!bud) { setError("Définis d'abord une limite pour cette catégorie."); return; }
+      const { data, error: err } = await supabase.from("recurring_budgets").insert({ user_id: userId, category_id: catId, amount: bud.planned_amount }).select("id, category_id, amount").single();
+      if (err) { setError("Erreur lors de l'activation."); return; }
+      if (data) {
+        setRecurringBudgets((p) => [...p, data as RecurringBudget]);
+        const nm = now.getMonth() + 2; const ny = nm > 12 ? now.getFullYear() + 1 : now.getFullYear(); const nn = nm > 12 ? nm - 12 : nm;
+        const nextKey = `${ny}-${String(nn).padStart(2, "0")}-01`;
+        const am = nn + 1; const ay = am > 12 ? ny + 1 : ny; const an = am > 12 ? 1 : am;
+        const afterKey = `${ay}-${String(an).padStart(2, "0")}-01`;
+        const { data: eb } = await supabase.from("budgets").select("id").eq("user_id", userId).eq("category_id", catId).eq("month", nextKey).maybeSingle();
+        if (!eb) await supabase.from("budgets").insert({ user_id: userId, category_id: catId, month: nextKey, planned_amount: bud.planned_amount });
+        const { data: et } = await supabase.from("transactions").select("id").eq("user_id", userId).eq("category_id", catId).gte("date", nextKey).lt("date", afterKey).maybeSingle();
+        if (!et) {
+          await supabase.from("transactions").insert({ user_id: userId, category_id: catId, amount: bud.planned_amount, type: "expense", date: nextKey, note: "Dépense récurrente" });
+          const { data: updTx } = await supabase.from("transactions").select("amount, type, date, category_id").order("date", { ascending: false });
+          if (updTx) setTransactions(updTx.map((r) => ({ category_id: r.category_id as string, amount: Number(r.amount ?? 0), type: r.type as "income" | "expense", date: r.date as string })));
+        }
+      }
+    }
+  }
+
+  return (
+    <div className="min-h-screen w-full bg-surface">
+      <Sidebar onLogout={onLogout} activeItem={activeItem} onNavigate={onNavigate} userProfile={userProfile} />
+
+      <main className="lg:ml-[var(--sidebar-width)] transition-all duration-200 flex flex-col min-h-screen">
+        <header className="sticky top-0 z-20 glass border-b border-surface-border flex-shrink-0">
+          <div className="flex items-center justify-between px-4 py-3.5 lg:px-8 lg:py-4">
+            <h1 className="text-sm lg:text-base font-semibold text-fg">Budget</h1>
+            <div className="flex items-center gap-1.5">
+              <button onClick={() => setActiveMonthStart((d) => addMonthsToDate(d, -1))} className="w-8 h-8 flex items-center justify-center rounded-lg text-fg-muted hover:text-fg hover:bg-surface-hover transition-colors" aria-label="Mois précédent">
+                <ArrowLeftIcon className="w-4 h-4" />
+              </button>
+              <span className="text-xs font-medium text-fg min-w-[110px] text-center">{formatMonthYear(activeMonthStart)}</span>
+              <button onClick={() => setActiveMonthStart((d) => addMonthsToDate(d, 1))} className="w-8 h-8 flex items-center justify-center rounded-lg text-fg-muted hover:text-fg hover:bg-surface-hover transition-colors" aria-label="Mois suivant">
+                <ArrowRightIcon className="w-4 h-4" />
+              </button>
+              <NotificationBell userId={userId} />
             </div>
           </div>
         </header>
 
-        {isFilterOpen ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 sm:hidden">
-            <div className="w-full max-w-sm bg-dark-card border border-dark-border rounded-2xl shadow-2xl">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-dark-border">
-                <p className="text-sm font-semibold text-white">Filtrer</p>
-                <button
-                  type="button"
-                  onClick={() => setIsFilterOpen(false)}
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-dark-border text-gray-300 text-xs font-semibold hover:bg-dark-hover transition-colors"
-                >
-                  Fermer
-                </button>
+        {error && (
+          <div className="mx-4 mt-3 px-4 py-2.5 rounded-xl bg-red-500/10 border border-red-500/25 text-xs text-red-400 flex items-center justify-between">
+            <span>{error}</span>
+            <button onClick={() => setError("")}><XIcon className="w-4 h-4" /></button>
+          </div>
+        )}
+
+        {/* ── Mobile layout ── */}
+        <div className="lg:hidden flex-1 px-4 py-5 space-y-4 pb-8">
+          <div className="rounded-2xl border border-surface-border bg-surface-card p-4 space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-fg-subtle">Revenus</p>
+                <p className="text-lg font-bold text-emerald-400 tabular-nums">{fmtShort(activeMonthIncome)} €</p>
               </div>
-              <div className="px-5 py-4 space-y-4">
-                <div className="space-y-2">
-                  <label className="text-xs text-gray-500">Mois</label>
-                  <select
-                    value={draftMonth}
-                    onChange={(event) =>
-                      setDraftMonth(Number(event.target.value))
-                    }
-                    className="w-full bg-dark border border-dark-border rounded-lg px-3 py-2 text-xs text-gray-200 focus:outline-none focus:ring-2 focus:ring-gold/40"
-                  >
-                    {monthOptions.map((label, index) => (
-                      <option key={label} value={index + 1}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs text-gray-500">Annee</label>
-                  <select
-                    value={draftYear}
-                    onChange={(event) =>
-                      setDraftYear(Number(event.target.value))
-                    }
-                    className="w-full bg-dark border border-dark-border rounded-lg px-3 py-2 text-xs text-gray-200 focus:outline-none focus:ring-2 focus:ring-gold/40"
-                  >
-                    {yearOptions.map((year) => (
-                      <option key={year} value={year}>
-                        {year}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleApplyMonthFilter();
-                    setIsFilterOpen(false);
-                  }}
-                  className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dark-border text-gray-300 text-xs font-semibold hover:bg-dark-hover transition-colors"
-                >
-                  Appliquer
-                </button>
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-fg-subtle">Dépenses</p>
+                <p className="text-lg font-bold text-red-400 tabular-nums">{fmtShort(totalSpent)} €</p>
               </div>
             </div>
+            {totalSavingsPlanned > 0 && (
+              <div className="flex items-center justify-between rounded-xl bg-accent/8 border border-accent/20 px-3 py-2.5">
+                <div className="flex items-center gap-1.5">
+                  <PiggyBankIcon className="w-3.5 h-3.5 text-accent" />
+                  <p className="text-xs text-fg-subtle">Épargne prévue</p>
+                </div>
+                <p className="text-sm font-bold text-accent tabular-nums">{fmtShort(totalSavingsPlanned)} €</p>
+              </div>
+            )}
+            {totalAllocated > 0 && (
+              <div>
+                <div className="flex items-center justify-between text-[11px] text-fg-subtle mb-1.5">
+                  <span>Budget alloué: {fmtShort(totalAllocated)} €</span>
+                  <span className={usageRatio >= 0.9 ? "text-red-400" : usageRatio >= 0.7 ? "text-warning" : "text-success"}>{Math.round(usageRatio * 100)}%</span>
+                </div>
+                <div className="h-2 rounded-full bg-surface border border-surface-border overflow-hidden">
+                  <motion.div initial={{ width: "0%" }} animate={{ width: `${Math.round(usageRatio * 100)}%` }} transition={{ duration: 0.6, ease: "easeOut" }} className={`h-full rounded-full ${getBarColor(usageRatio)}`} />
+                </div>
+                {activeMonthIncome > 0 && (
+                  <p className={`text-[11px] mt-1.5 ${reste >= 0 ? "text-success" : "text-red-400"}`}>
+                    Reste disponible : {fmtShort(reste)} €
+                  </p>
+                )}
+              </div>
+            )}
           </div>
-        ) : null}
 
-        <div className="px-6 py-6 lg:px-8 lg:py-8 space-y-6">
-          {activeMonthIncome > 0 ? (
-            <>
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, delay: 0.1 }}
-                className="bg-dark-card border border-dark-border rounded-xl p-6"
-              >
-                <div className="space-y-4 text-center">
-                  <div>
-                    <p className="text-xs text-gray-500">Revenu du mois</p>
-                    <p className="text-3xl sm:text-4xl lg:text-5xl font-bold text-emerald-400 mt-2">
-                      {formatAmount(activeMonthIncome)} €
-                    </p>
+          <MobileSpendingPie data={pieData} total={totalSpent} />
+
+          <div className="rounded-2xl border border-surface-border bg-surface-card overflow-hidden">
+            <div className="px-4 py-3 border-b border-surface-border">
+              <p className="text-sm font-semibold text-fg">Progression par catégorie</p>
+            </div>
+            <div className="divide-y divide-surface-border/60">
+              {categoriesWithBudget.map((cat) => {
+                const spent = spentByCategory[cat.id] ?? 0;
+                const limit = budgetsByCategory[cat.id]?.planned_amount ?? 0;
+                const ratio = limit > 0 ? Math.min(spent / limit, 1) : 0;
+                const isOver = spent > limit;
+                const isExact = limit > 0 && Math.abs(spent - limit) < 0.005;
+                return (
+                  <div key={cat.id} className="px-4 py-3">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-sm font-medium text-fg">{cat.name}</span>
+                      <span className={`text-xs tabular-nums ${isExact ? "text-indigo-400 font-semibold" : isOver ? "text-red-400 font-semibold" : "text-fg-subtle"}`}>
+                        {fmtShort(spent)} / {fmtShort(limit)} €
+                      </span>
+                    </div>
+                    <div className="h-2 rounded-full bg-surface border border-surface-border overflow-hidden">
+                      <div style={{ width: `${Math.round(ratio * 100)}%`, backgroundColor: getBarColorHex(ratio, isExact) }} className="h-full rounded-full transition-all duration-500" />
+                    </div>
+                  </div>
+                );
+              })}
+              {categoriesWithBudget.length === 0 && (
+                <div className="px-4 py-8 text-center text-sm text-fg-subtle">Aucune limite définie. Configurez vos budgets sur ordinateur.</div>
+              )}
+            </div>
+          </div>
+
+          {savingsItems.length > 0 && (
+            <div className="rounded-2xl border border-surface-border bg-surface-card overflow-hidden">
+              <div className="px-4 py-3 border-b border-surface-border flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <PiggyBankIcon className="w-4 h-4 text-accent" />
+                  <p className="text-sm font-semibold text-fg">Épargne prévue</p>
+                </div>
+                {totalSavingsPlanned > 0 && <span className="text-xs font-semibold text-accent tabular-nums">{fmtShort(totalSavingsPlanned)} €</span>}
+              </div>
+              <div className="divide-y divide-surface-border/60">
+                {savingsItems.map(item => {
+                  const key = `${item.sourceType}-${item.id}`;
+                  const planned = savingsBudgetByKey[key]?.planned_amount ?? 0;
+                  return (
+                    <div key={key} className="px-4 py-3 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-lg">{item.emoji}</span>
+                        <span className="text-sm text-fg truncate">{item.name}</span>
+                        {item.badge && <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-surface-elevated border border-surface-border text-fg-subtle flex-shrink-0">{item.badge}</span>}
+                      </div>
+                      <span className={`text-sm font-medium tabular-nums flex-shrink-0 ${planned > 0 ? "text-accent" : "text-fg-disabled"}`}>
+                        {planned > 0 ? `${fmtShort(planned)} €` : "—"}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Desktop layout ── */}
+        <div className="hidden lg:flex flex-1 overflow-hidden" style={{ height: "calc(100vh - 57px)" }}>
+          {/* Left panel */}
+          <aside className="w-80 xl:w-96 flex-shrink-0 border-r border-surface-border overflow-y-auto flex flex-col">
+            {/* Summary */}
+            <div className="p-5 border-b border-surface-border space-y-4 flex-shrink-0">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl bg-emerald-500/8 border border-emerald-500/20 p-3">
+                  <p className="text-[10px] uppercase tracking-widest text-fg-subtle mb-1">Revenus</p>
+                  <p className="text-base font-bold text-emerald-400 tabular-nums">{fmtShort(activeMonthIncome)} €</p>
+                </div>
+                <div className="rounded-xl bg-red-500/8 border border-red-500/20 p-3">
+                  <p className="text-[10px] uppercase tracking-widest text-fg-subtle mb-1">Dépenses</p>
+                  <p className="text-base font-bold text-red-400 tabular-nums">{fmtShort(totalSpent)} €</p>
+                </div>
+              </div>
+
+              {totalSavingsPlanned > 0 && (
+                <div className="rounded-xl bg-accent/8 border border-accent/20 p-3 flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <PiggyBankIcon className="w-3.5 h-3.5 text-accent" />
+                    <p className="text-[10px] uppercase tracking-widest text-fg-subtle">Épargne prévue</p>
+                  </div>
+                  <p className="text-base font-bold text-accent tabular-nums">{fmtShort(totalSavingsPlanned)} €</p>
+                </div>
+              )}
+
+              {totalAllocated > 0 && (
+                <div>
+                  <div className="flex items-center justify-between text-xs text-fg-subtle mb-2">
+                    <span>Budget alloué: {fmtShort(totalAllocated)} €</span>
+                    <span className={`font-medium ${usageRatio >= 0.9 ? "text-red-400" : usageRatio >= 0.7 ? "text-warning" : "text-success"}`}>
+                      {Math.round(usageRatio * 100)}% utilisé
+                    </span>
+                  </div>
+                  <div className="h-2 rounded-full bg-surface border border-surface-border overflow-hidden">
+                    <motion.div initial={{ width: "0%" }} animate={{ width: `${Math.round(usageRatio * 100)}%` }} transition={{ duration: 0.6, ease: "easeOut" }} className={`h-full rounded-full ${getBarColor(usageRatio)}`} />
                   </div>
 
-                  <div className="w-full">
-                    <div className="flex items-center justify-between text-xs text-gray-500">
-                      <span>Utilisation du budget</span>
-                      <span>{Math.round(topProgress * 100)}%</span>
+                  {totalEngaged > activeMonthIncome && activeMonthIncome > 0 && (
+                    <div className="flex items-center gap-1.5 mt-2 text-xs text-warning">
+                      <TrendingDownIcon className="w-3.5 h-3.5" />
+                      <span>Budget total supérieur aux revenus</span>
                     </div>
-                    <div className="mt-2 h-2 rounded-full bg-dark border border-dark-border overflow-hidden">
-                      <div
-                        className="h-full bg-emerald-500"
-                        style={{ width: `${Math.round(topProgress * 100)}%` }}
-                      />
+                  )}
+                  {totalEngaged <= activeMonthIncome && activeMonthIncome > 0 && (
+                    <div className="flex items-center gap-1.5 mt-2 text-xs text-success">
+                      <TrendingUpIcon className="w-3.5 h-3.5" />
+                      <span>Reste disponible : {fmtShort(reste)} €</span>
                     </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Expense categories */}
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-fg-subtle">Limites par catégorie</p>
+                {isCurrentMonth && (
+                  <span className="text-[10px] text-fg-disabled">
+                    <RefreshCwIcon className="w-2.5 h-2.5 inline mr-1 text-emerald-400" />Récurrence active
+                  </span>
+                )}
+              </div>
+              <div className="space-y-1">
+                {expenseCategories.map((cat) => {
+                  const isRecurring = recurringBudgets.some((r) => r.category_id === cat.id);
+                  return (
+                    <CategoryRow key={cat.id} cat={cat} budget={budgetsByCategory[cat.id]} spent={spentByCategory[cat.id] ?? 0}
+                      isRecurring={isRecurring} isCurrentMonth={isCurrentMonth} onSave={handleSaveBudget}
+                      onToggleRecurring={handleToggleRecurring} isSavingId={savingId} />
+                  );
+                })}
+              </div>
+              {isCurrentMonth && (
+                <div className="mt-4 pt-4 border-t border-surface-border">
+                  <div className="flex items-start gap-2 p-3 rounded-xl bg-surface-elevated border border-surface-border text-xs text-fg-subtle">
+                    <RefreshCwIcon className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-emerald-400" />
+                    <span>Activez la récurrence via l'icône <RefreshCwIcon className="w-3 h-3 inline" /> lors de l'édition pour reporter automatiquement ce budget le mois prochain.</span>
                   </div>
                 </div>
-              </motion.div>
+              )}
 
+              {/* ── Savings section ── */}
+              <div className="mt-4 pt-4 border-t border-surface-border">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-1.5">
+                    <PiggyBankIcon className="w-3.5 h-3.5 text-accent" />
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-fg-subtle">Épargne planifiée</p>
+                  </div>
+                  {totalSavingsPlanned > 0 && (
+                    <span className="text-[11px] font-semibold text-accent tabular-nums">{fmtShort(totalSavingsPlanned)} €</span>
+                  )}
+                </div>
+
+                {savingsItems.length === 0 ? (
+                  <button
+                    onClick={() => onNavigate?.("savings")}
+                    className="w-full text-left p-3 rounded-xl bg-surface-elevated border border-dashed border-surface-border text-xs text-fg-subtle hover:border-accent/40 hover:text-accent/80 transition-colors"
+                  >
+                    <PiggyBankIcon className="w-3.5 h-3.5 inline mr-1.5" />
+                    Créer des objectifs ou placements dans la page Épargne
+                  </button>
+                ) : (
+                  <div className="space-y-1">
+                    {savingsItems.map(item => (
+                      <SavingsRow
+                        key={`${item.sourceType}-${item.id}`}
+                        item={item}
+                        planned={savingsBudgetByKey[`${item.sourceType}-${item.id}`]?.planned_amount ?? 0}
+                        onSave={handleSaveSavingsBudget}
+                        isSavingKey={savingSavingsId}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </aside>
+
+          {/* Right panel */}
+          <div className="flex-1 overflow-y-auto p-6 xl:p-8">
+            {activeMonthIncome === 0 && totalAllocated === 0 ? (
+              <div className="h-full flex items-center justify-center">
+                <div className="text-center max-w-xs">
+                  <div className="w-14 h-14 rounded-2xl bg-accent/10 border border-accent/20 flex items-center justify-center mx-auto mb-4">
+                    <CheckIcon className="w-6 h-6 text-accent" />
+                  </div>
+                  <p className="text-sm font-medium text-fg mb-1">Aucune donnée pour ce mois</p>
+                  <p className="text-xs text-fg-subtle">Ajoutez des transactions ou définissez vos limites dans le panneau de gauche.</p>
+                </div>
+              </div>
+            ) : (
               <div className="space-y-6">
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.4, delay: 0.2 }}
-                  className="grid grid-cols-1 md:grid-cols-2 gap-6"
-                >
-                  <div
-                    onClick={() => setIsLimitsOpen(true)}
-                    className="bg-dark-card border border-dark-border rounded-xl p-6 cursor-pointer hover:bg-dark-hover hover:border-gold/50 transition-all duration-200 group"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-gold/10 border border-gold/20 flex items-center justify-center group-hover:bg-gold/20 transition-colors">
-                          <Settings className="w-6 h-6 text-gold" />
-                        </div>
+                {/* Répartition du budget (épargne incluse) */}
+                {(totalAllocated > 0 || totalSavingsPlanned > 0) && activeMonthIncome > 0 && (
+                  <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}
+                    className="rounded-2xl border border-surface-border bg-surface-card p-5">
+                    <h2 className="text-sm font-semibold text-fg mb-1">Répartition du budget</h2>
+                    <p className="text-xs text-fg-subtle mb-4">Revenus alloués ce mois</p>
+                    <div className="space-y-3">
+                      {totalAllocated > 0 && (
                         <div>
-                          <h2 className="text-base font-semibold text-white group-hover:text-gold transition-colors">
-                            Configurer les limites
-                          </h2>
-                          <p className="text-sm text-gray-400 mt-0.5">
-                            Definis tes limites de depenses par categorie
-                          </p>
+                          <div className="flex items-center justify-between text-xs mb-1.5">
+                            <span className="text-fg-secondary">Dépenses prévues</span>
+                            <span className="tabular-nums text-fg-subtle">{fmt(totalAllocated)} € · {activeMonthIncome > 0 ? Math.round((totalAllocated / activeMonthIncome) * 100) : 0}%</span>
+                          </div>
+                          <div className="h-2 rounded-full bg-surface border border-surface-border overflow-hidden">
+                            <motion.div initial={{ width: "0%" }} animate={{ width: `${Math.min((totalAllocated / activeMonthIncome) * 100, 100)}%` }}
+                              transition={{ duration: 0.6, ease: "easeOut" }} className="h-full rounded-full bg-red-400" />
+                          </div>
                         </div>
-                      </div>
-                      <ChevronRightIcon className="w-5 h-5 text-gray-500 group-hover:text-gold group-hover:translate-x-1 transition-all" />
-                    </div>
-                  </div>
-
-                  <div
-                    onClick={() => setIsRecurringOpen(true)}
-                    className="bg-dark-card border border-dark-border rounded-xl p-6 cursor-pointer hover:bg-dark-hover hover:border-emerald-500/50 transition-all duration-200 group"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors">
-                          <RefreshCw className="w-6 h-6 text-emerald-500" />
-                        </div>
+                      )}
+                      {totalSavingsPlanned > 0 && (
                         <div>
-                          <h2 className="text-base font-semibold text-white group-hover:text-emerald-500 transition-colors">
-                            Depenses recurrentes
-                          </h2>
-                          <p className="text-sm text-gray-400 mt-0.5">
-                            Configure tes abonnements et factures
-                          </p>
+                          <div className="flex items-center justify-between text-xs mb-1.5">
+                            <span className="text-fg-secondary flex items-center gap-1"><PiggyBankIcon className="w-3 h-3" />Épargne prévue</span>
+                            <span className="tabular-nums text-fg-subtle">{fmt(totalSavingsPlanned)} € · {activeMonthIncome > 0 ? Math.round((totalSavingsPlanned / activeMonthIncome) * 100) : 0}%</span>
+                          </div>
+                          <div className="h-2 rounded-full bg-surface border border-surface-border overflow-hidden">
+                            <motion.div initial={{ width: "0%" }} animate={{ width: `${Math.min((totalSavingsPlanned / activeMonthIncome) * 100, 100)}%` }}
+                              transition={{ duration: 0.6, ease: "easeOut", delay: 0.1 }} className="h-full rounded-full bg-accent" />
+                          </div>
                         </div>
-                      </div>
-                      <ChevronRightIcon className="w-5 h-5 text-gray-500 group-hover:text-emerald-500 group-hover:translate-x-1 transition-all" />
+                      )}
+                      {reste > 0 && (
+                        <div>
+                          <div className="flex items-center justify-between text-xs mb-1.5">
+                            <span className="text-fg-secondary">Reste disponible</span>
+                            <span className="tabular-nums text-success font-medium">{fmt(reste)} €</span>
+                          </div>
+                          <div className="h-2 rounded-full bg-surface border border-surface-border overflow-hidden">
+                            <motion.div initial={{ width: "0%" }} animate={{ width: `${Math.min((reste / activeMonthIncome) * 100, 100)}%` }}
+                              transition={{ duration: 0.6, ease: "easeOut", delay: 0.2 }} className="h-full rounded-full bg-emerald-400" />
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                </motion.div>
+                  </motion.div>
+                )}
 
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.4, delay: 0.35 }}
-                  className="bg-dark-card border border-dark-border rounded-xl p-6"
-                >
-                  <h2 className="text-sm font-semibold text-white">
-                    Répartition du budget
-                  </h2>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Limites définies pour le mois en cours.
-                  </p>
-
-                  {budgetChartData.categories.length === 0 &&
-                  budgetChartData.remainingBudget <= 0 ? (
-                    <div className="py-12 text-center text-sm text-gray-500">
-                      Définis des limites pour voir la répartition.
-                    </div>
+                {/* Progression par catégorie */}
+                <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.05 }} className="rounded-2xl border border-surface-border bg-surface-card p-5">
+                  <h2 className="text-sm font-semibold text-fg mb-1">Progression par catégorie</h2>
+                  <p className="text-xs text-fg-subtle mb-5">Dépenses vs limites ce mois</p>
+                  {categoriesWithBudget.length === 0 ? (
+                    <p className="text-sm text-fg-subtle text-center py-6">Définissez des limites dans le panneau gauche.</p>
                   ) : (
-                    <>
-                      <div className="mt-6 w-full space-y-6">
-                        <div className="w-full h-80">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <BarChart
-                              data={budgetChartData.data}
-                              margin={{
-                                top: 20,
-                                right: 30,
-                                left: 100,
-                                bottom: 20,
-                              }}
-                            >
-                              <CartesianGrid
-                                strokeDasharray="3 3"
-                                stroke="#374151"
-                              />
-                              <XAxis
-                                dataKey="name"
-                                stroke="#9CA3AF"
-                                style={{ fontSize: "12px" }}
-                              />
-                              <YAxis
-                                stroke="#9CA3AF"
-                                style={{ fontSize: "12px" }}
-                              />
-                              <Tooltip
-                                contentStyle={{
-                                  backgroundColor: "#1F2937",
-                                  border: "1px solid #374151",
-                                  borderRadius: "8px",
-                                }}
-                              />
-                              <Legend
-                                wrapperStyle={{
-                                  fontSize: "12px",
-                                  paddingTop: "20px",
-                                }}
-                                verticalAlign="bottom"
-                              />
-                              {budgetChartData.categories.map((item, index) => (
-                                <Bar
-                                  key={`bar-${index.toString()}`}
-                                  dataKey={item.name}
-                                  stackId="budget"
-                                  fill={item.color}
-                                  name={item.name}
-                                  radius={
-                                    index === 0
-                                      ? [8, 0, 0, 8]
-                                      : index ===
-                                          budgetChartData.categories.length - 1
-                                        ? [0, 8, 8, 0]
-                                        : 0
-                                  }
-                                />
-                              ))}
-                              {budgetChartData.remainingBudget > 0 && (
-                                <Bar
-                                  dataKey="Budget non alloué"
-                                  stackId="budget"
-                                  fill="#6B7280"
-                                  name="Budget non alloué"
-                                  radius={[0, 8, 8, 0]}
-                                />
-                              )}
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </div>
-                    </>
+                    <div className="space-y-4">
+                      {categoriesWithBudget.map((cat, idx) => {
+                        const spent = spentByCategory[cat.id] ?? 0;
+                        const limit = budgetsByCategory[cat.id]?.planned_amount ?? 0;
+                        const ratio = limit > 0 ? Math.min(spent / limit, 1) : 0;
+                        const isOver = spent > limit;
+                        const isExact = limit > 0 && Math.abs(spent - limit) < 0.005;
+                        const avgS = avgThreeMonths[cat.id] ?? 0;
+                        return (
+                          <motion.div key={cat.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.04 * idx }}>
+                            <div className="flex items-center justify-between text-xs mb-1.5">
+                              <span className="font-medium text-fg-secondary">{cat.name}</span>
+                              <span className={isExact ? "text-indigo-400 font-semibold" : isOver ? "text-red-400 font-semibold" : "text-fg-subtle"}>
+                                {fmt(spent)} / {fmt(limit)} €<span className="ml-1 opacity-60">{Math.round(ratio * 100)}%</span>
+                              </span>
+                            </div>
+                            <div className="h-2 rounded-full bg-surface border border-surface-border overflow-hidden">
+                              <motion.div initial={{ width: "0%" }} animate={{ width: `${Math.round(ratio * 100)}%` }} transition={{ duration: 0.6, ease: "easeOut", delay: 0.06 * idx }} style={{ backgroundColor: getBarColorHex(ratio, isExact) }} className="h-full rounded-full" />
+                            </div>
+                            {avgS > 0 && <p className="text-[10px] text-fg-subtle mt-1">Moy. 3 derniers mois : {fmt(avgS)} €</p>}
+                          </motion.div>
+                        );
+                      })}
+                    </div>
                   )}
                 </motion.div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <BudgetComparisonChart
-                    data={budgetComparisonData}
-                    month={activeMonthStart.toLocaleDateString("fr-FR", {
-                      month: "long",
-                      year: "numeric",
-                    })}
-                  />
-
-                  <DailySpendingChart
-                    data={dailySpendingData}
-                    month={activeMonthStart.toLocaleDateString("fr-FR", {
-                      month: "long",
-                    })}
-                  />
-                </div>
-
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.4, delay: 0.5 }}
-                  className="bg-dark-card border border-dark-border rounded-xl p-6"
-                >
-                  <div>
-                    <h2 className="text-sm font-semibold text-white">
-                      Progression par categorie
-                    </h2>
-                    <p className="text-xs text-gray-500">
-                      Consulte rapidement toutes les categories.
-                    </p>
+                {/* Daily chart */}
+                <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }} className="rounded-2xl border border-surface-border bg-surface-card p-5">
+                  <div className="mb-4">
+                    <h2 className="text-sm font-semibold text-fg">Dépenses jour par jour</h2>
+                    <p className="text-xs text-fg-subtle mt-0.5">{activeMonthStart.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}</p>
                   </div>
-
-                  <div className="mt-6 space-y-3">
-                    {expenseCategories
-                      .filter((category) => {
-                        const limit =
-                          budgetsByCategory[category.id]?.planned_amount ?? 0;
-                        return limit > 0;
-                      })
-                      .map((category) => {
-                        const spent =
-                          activeMonthSpentByCategory[category.id] ?? 0;
-                        const limit =
-                          budgetsByCategory[category.id]?.planned_amount ?? 0;
-                        const ratio =
-                          limit > 0 ? Math.min(spent / limit, 1) : 0;
-                        return (
-                          <div key={category.id}>
-                            <div className="flex items-center justify-between text-xs text-gray-500">
-                              <span>{category.name}</span>
-                              <span>
-                                {formatAmount(spent)} / {formatAmount(limit)} €
-                              </span>
-                            </div>
-                            <div className="mt-2 h-2 rounded-full bg-dark border border-dark-border overflow-hidden">
-                              <div
-                                className="h-full bg-gold"
-                                style={{ width: `${Math.round(ratio * 100)}%` }}
-                              />
-                            </div>
-                          </div>
-                        );
-                      })}
-                  </div>
+                  <DailySpendingChart data={dailySpendingData} />
                 </motion.div>
               </div>
-
-              {isLimitsOpen ? (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-                  <div className="w-full max-w-4xl bg-dark-card border border-dark-border rounded-2xl shadow-2xl">
-                    <div className="flex items-center justify-between px-6 py-4 border-b border-dark-border">
-                      <div>
-                        <p className="text-sm font-semibold text-white">
-                          Limites par categorie
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {activeMonthStart.toLocaleDateString("fr-FR", {
-                            month: "long",
-                            year: "numeric",
-                          })}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setIsLimitsOpen(false)}
-                        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-dark-border text-gray-300 text-xs font-semibold hover:bg-dark-hover transition-colors"
-                      >
-                        Fermer
-                      </button>
-                    </div>
-
-                    <div className="px-6 py-5 max-h-[70vh] overflow-y-auto">
-                      {actionError ? (
-                        <p className="mb-4 text-xs text-red-400">
-                          {actionError}
-                        </p>
-                      ) : null}
-
-                      <div className="space-y-4">
-                        {isLoading ? (
-                          <p className="text-sm text-gray-500">Chargement...</p>
-                        ) : expenseCategories.length === 0 ? (
-                          <p className="text-sm text-gray-500">
-                            Aucune categorie de depense disponible.
-                          </p>
-                        ) : (
-                          expenseCategories.map((category) => {
-                            const budget = budgetsByCategory[category.id];
-                            const spent =
-                              activeMonthSpentByCategory[category.id] ?? 0;
-                            const avgSpent =
-                              avgSixMonthsSpentByCategory[category.id] ?? 0;
-                            const limit = budget?.planned_amount ?? 0;
-                            const remaining = limit - spent;
-                            const ratio =
-                              limit > 0 ? Math.min(spent / limit, 1) : 0;
-                            const avgRatio =
-                              limit > 0 ? Math.min(avgSpent / limit, 1) : 0;
-                            const isAvgOver = limit > 0 && avgSpent > limit;
-                            const isOver = remaining < 0;
-                            const isEditing =
-                              editingCategoryId === category.id || !budget;
-
-                            return (
-                              <div
-                                key={category.id}
-                                className="bg-dark-elevated border border-dark-border rounded-xl p-4"
-                              >
-                                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                                  <div>
-                                    <p className="text-sm font-semibold text-white">
-                                      {category.name}
-                                    </p>
-                                  </div>
-                                  <div className="flex flex-wrap items-center gap-3">
-                                    <div className="flex items-center gap-2">
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        value={draftLimits[category.id] ?? ""}
-                                        onChange={(event) =>
-                                          setDraftLimits((prev) => ({
-                                            ...prev,
-                                            [category.id]: event.target.value,
-                                          }))
-                                        }
-                                        disabled={!isEditing}
-                                        className="w-32 bg-dark border border-dark-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-gold/40 disabled:opacity-60"
-                                        placeholder="0,00"
-                                      />
-                                      <span className="text-xs text-gray-500">
-                                        €
-                                      </span>
-                                    </div>
-
-                                    {isEditing ? (
-                                      <>
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            void handleSaveBudget(category.id)
-                                          }
-                                          disabled={
-                                            savingCategoryId === category.id
-                                          }
-                                          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-gold text-dark text-xs font-semibold hover:bg-gold-light transition-colors disabled:opacity-60"
-                                        >
-                                          <SaveIcon className="w-4 h-4" />
-                                          Enregistrer
-                                        </button>
-                                        {budget ? (
-                                          <button
-                                            type="button"
-                                            onClick={() =>
-                                              handleCancelEdit(category.id)
-                                            }
-                                            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-dark-border text-gray-300 text-xs font-semibold hover:bg-dark-hover transition-colors"
-                                          >
-                                            <XIcon className="w-4 h-4" />
-                                            Annuler
-                                          </button>
-                                        ) : null}
-                                      </>
-                                    ) : (
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          setEditingCategoryId(category.id)
-                                        }
-                                        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-dark-border text-gray-300 text-xs font-semibold hover:bg-dark-hover transition-colors"
-                                      >
-                                        <PencilIcon className="w-4 h-4" />
-                                        Modifier
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-
-                                <div className="mt-1">
-                                  <div className="flex items-center justify-between text-xs text-gray-500">
-                                    <span>
-                                      Depense: {formatAmount(spent)} €
-                                    </span>
-                                    <span>
-                                      {limit > 0
-                                        ? `${Math.round(ratio * 100)}%`
-                                        : "0%"}
-                                    </span>
-                                  </div>
-                                  <div className="mt-2 relative">
-                                    <div className="h-2 rounded-full bg-dark border border-dark-border overflow-hidden">
-                                      <div
-                                        className={`h-full ${
-                                          isOver
-                                            ? "bg-red-500"
-                                            : "bg-emerald-500"
-                                        }`}
-                                        style={{
-                                          width: `${Math.round(ratio * 100)}%`,
-                                        }}
-                                      />
-                                    </div>
-                                    {limit > 0 && avgSpent > 0 ? (
-                                      <>
-                                        <div
-                                          className="absolute -top-1 h-4 w-0.5 bg-gold"
-                                          style={{
-                                            left: `${Math.round(avgRatio * 100)}%`,
-                                            transform: "translateX(-50%)",
-                                          }}
-                                        />
-                                        {isAvgOver ? (
-                                          <span className="absolute -top-1 left-full ml-1 text-[10px] text-gold">
-                                            +
-                                          </span>
-                                        ) : null}
-                                      </>
-                                    ) : null}
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-
-              {isRecurringOpen ? (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.2 }}
-                    className="w-full max-w-3xl bg-dark-card border border-dark-border rounded-2xl shadow-2xl overflow-hidden"
-                  >
-                    <div className="flex items-center justify-between px-6 py-4 border-b border-dark-border bg-dark-elevated">
-                      <div>
-                        <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                          <RefreshCw className="w-5 h-5 text-emerald-500" />
-                          Depenses recurrentes
-                        </h3>
-                        <p className="text-sm text-gray-400 mt-1">
-                          Les montants seront automatiquement reportes chaque
-                          mois
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setIsRecurringOpen(false)}
-                        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-dark-border text-gray-300 text-xs font-semibold hover:bg-dark-hover transition-colors"
-                      >
-                        <XIcon className="w-4 h-4" />
-                        Fermer
-                      </button>
-                    </div>
-
-                    <div className="p-6 max-h-[70vh] overflow-y-auto">
-                      {actionError ? (
-                        <div className="mb-4 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
-                          {actionError}
-                        </div>
-                      ) : null}
-
-                      <div className="space-y-3">
-                        {expenseCategories
-                          .filter((category) => {
-                            const hasLimit =
-                              budgetsByCategory[category.id]?.planned_amount >
-                              0;
-                            return hasLimit;
-                          })
-                          .map((category) => {
-                            const isRecurring = recurringBudgets.some(
-                              (r) => r.category_id === category.id,
-                            );
-                            const currentAmount =
-                              budgetsByCategory[category.id]?.planned_amount ??
-                              0;
-
-                            return (
-                              <div
-                                key={category.id}
-                                className={`p-4 rounded-xl border transition-all ${
-                                  isRecurring
-                                    ? "bg-emerald-500/5 border-emerald-500/30"
-                                    : "bg-dark-elevated border-dark-border"
-                                }`}
-                              >
-                                <div className="flex items-start justify-between gap-4">
-                                  <div className="flex-1">
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-3">
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            handleToggleRecurring(category.id)
-                                          }
-                                          className={`w-12 h-6 rounded-full transition-colors relative ${
-                                            isRecurring
-                                              ? "bg-emerald-500"
-                                              : "bg-gray-600"
-                                          }`}
-                                        >
-                                          <div
-                                            className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-lg transition-transform ${
-                                              isRecurring
-                                                ? "translate-x-6"
-                                                : "translate-x-0.5"
-                                            }`}
-                                          />
-                                        </button>
-                                        <div>
-                                          <h4 className="text-sm font-semibold text-white">
-                                            {category.name}
-                                          </h4>
-                                          {isRecurring ? (
-                                            <p className="text-xs text-emerald-400 mt-0.5">
-                                              Recurrence activee
-                                            </p>
-                                          ) : (
-                                            <p className="text-xs text-gray-500 mt-0.5">
-                                              Non recurrent
-                                            </p>
-                                          )}
-                                        </div>
-                                      </div>
-                                      {currentAmount > 0 ? (
-                                        <div className="text-right">
-                                          <p className="text-xs text-gray-400">
-                                            Montant mensuel
-                                          </p>
-                                          <p className="text-base font-semibold text-white">
-                                            {formatAmount(currentAmount)} €
-                                          </p>
-                                        </div>
-                                      ) : (
-                                        <div className="text-right">
-                                          <p className="text-xs text-orange-400">
-                                            Aucune limite definie
-                                          </p>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                      </div>
-
-                      {expenseCategories.length === 0 ? (
-                        <div className="py-12 text-center text-sm text-gray-500">
-                          Aucune categorie de depense disponible
-                        </div>
-                      ) : null}
-                    </div>
-                  </motion.div>
-                </div>
-              ) : null}
-            </>
-          ) : (
-            <div className="flex items-center justify-center rounded-xl border border-dark-border bg-dark-card px-6 py-12 text-center">
-              <p className="text-base sm:text-lg text-gray-300">
-                Aucun revenu n'est present pour ce mois. Ajoute un revenu avant
-                de configurer ton budget.
-              </p>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </main>
     </div>
