@@ -303,7 +303,7 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate }: BudgetP
       const { data: user } = await supabase.auth.getUser();
       if (user.user?.email) {
         const { data } = await supabase.from("profiles").select("first_name, last_name").eq("id", userId).single();
-        if (data && mounted) setUserProfile({ firstName: data.first_name || "Utilisateur", lastName: data.last_name || "", email: user.user.email });
+        if (data && mounted) setUserProfile({ firstName: data.first_name || "", lastName: data.last_name || "", email: user.user.email });
       }
 
       const [{ data: cats }, { data: buds }, { data: txs }, { data: recs }, { data: goals }, { data: placements }, { data: savBudgets }] = await Promise.all([

@@ -167,7 +167,7 @@ export function TransactionsPage({ onLogout, userId, activeItem, onNavigate }: T
       if (!user.user?.email) return;
       const { data } = await supabase.from("profiles").select("first_name, last_name").eq("id", userId).single();
       if (data && isMounted) {
-        setUserProfile({ firstName: data.first_name || "Utilisateur", lastName: data.last_name || "", email: user.user.email });
+        setUserProfile({ firstName: data.first_name || "", lastName: data.last_name || "", email: user.user.email });
       }
     }
 

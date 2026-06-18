@@ -79,7 +79,11 @@ export function App() {
     let mounted = true;
 
     supabase.auth.getSession().then(({ data }) => {
-      if (mounted) setSession(data.session ?? null);
+      if (!mounted) return;
+      setSession(data.session ?? null);
+      if (data.session?.user?.email) {
+        void loadProfile(data.session.user.id, data.session.user.email);
+      }
     });
 
     const { data } = supabase.auth.onAuthStateChange((event, newSession) => {

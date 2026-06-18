@@ -50,13 +50,16 @@ export function Sidebar({ onLogout, activeItem = "dashboard", onNavigate, userPr
     try { localStorage.setItem("theme", theme); } catch {}
   }, [theme]);
 
+  const emailFallback = userProfile?.email?.split("@")[0] ?? "Utilisateur";
+
   const initials = (() => {
     if (!userProfile) return "U";
-    return ((userProfile.firstName?.[0] ?? "") + (userProfile.lastName?.[0] ?? "")).toUpperCase() || "U";
+    const fromName = ((userProfile.firstName?.[0] ?? "") + (userProfile.lastName?.[0] ?? "")).toUpperCase();
+    return fromName || emailFallback[0]?.toUpperCase() || "U";
   })();
 
   const fullName = userProfile
-    ? `${userProfile.firstName} ${userProfile.lastName}`.trim() || "Utilisateur"
+    ? `${userProfile.firstName} ${userProfile.lastName}`.trim() || emailFallback
     : "Utilisateur";
 
   return (

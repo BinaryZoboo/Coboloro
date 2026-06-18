@@ -51,8 +51,10 @@ export function BottomNav({ activePage, onNavigate, onLogout, userProfile }: Bot
     return ((userProfile.firstName?.[0] ?? "") + (userProfile.lastName?.[0] ?? "")).toUpperCase() || "U";
   })();
 
+  const emailFallback = userProfile?.email?.split("@")[0] ?? "Utilisateur";
+
   const fullName = userProfile
-    ? `${userProfile.firstName} ${userProfile.lastName}`.trim() || "Utilisateur"
+    ? `${userProfile.firstName} ${userProfile.lastName}`.trim() || emailFallback
     : "Utilisateur";
 
   const handleTab = (id: string) => {
