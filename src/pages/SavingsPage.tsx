@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { NotificationBell } from "../components/NotificationBell";
+import { ProfileSheet, getInitials } from "../components/ProfileSheet";
 import { Sidebar } from "../components/Sidebar";
 import { supabase } from "../lib/supabaseClient";
 
@@ -62,6 +63,11 @@ interface PlacementFormState {
 
 const EMOJIS = ["🎯","🏠","🚗","✈️","💒","🎓","💻","🏖️","🎮","💰","🛡️","💍","🐾","🏋️","📱","🌍","🎸","🎬","🌿","⛵","🏦","📈","📊","🪙","💼","🌟","🎵","🧳","🍀","🔑"];
 const COLORS = ["#4F7EFF","#10B981","#F59E0B","#EF4444","#8B5CF6","#06B6D4","#F97316","#EC4899"];
+const PLACEMENT_TYPE_COLORS: Record<string, string> = {
+  livret: "#4F7EFF", assurance_vie: "#F5C188", pea: "#2DB87A",
+  ldds: "#06B6D4", pel: "#8B5CF6", crypto: "#F97316",
+  actions: "#EC4899", autre: "#9D9890",
+};
 const PLACEMENT_TYPES: { value: PlacementType; label: string }[] = [
   { value: "livret",        label: "Livret" },
   { value: "ldds",          label: "LDDS" },
@@ -101,6 +107,100 @@ function DaysChip({ days }: { days: number | null }) {
   const label = days > 0 ? `${days} j` : days === 0 ? "Aujourd'hui" : "Dépassé";
   const cls = days <= 0 ? "text-red-400 bg-red-500/10" : days <= 30 ? "text-warning bg-warning/10" : "text-fg-subtle bg-surface-elevated";
   return <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${cls}`}>{label}</span>;
+}
+
+function GoalsSummaryCard({ goals }: { goals: SavingsGoal[] }) {
+  const total    = goals.reduce((s, g) => s + g.current_amount, 0);
+  const totalTgt = goals.reduce((s, g) => s + g.target_amount, 0);
+  const pct      = totalTgt > 0 ? Math.min((total / totalTgt) * 100, 100) : 0;
+  const r = 36; const circ = 2 * Math.PI * r;
+  const active    = goals.filter(g => g.current_amount < g.target_amount || g.target_amount === 0).length;
+  const completed = goals.filter(g => g.current_amount >= g.target_amount && g.target_amount > 0).length;
+  return (
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+      className="rounded-2xl border border-surface-border bg-surface-card p-4 mb-2">
+      <div className="flex items-center gap-5">
+        <svg width="88" height="88" viewBox="0 0 88 88" className="flex-shrink-0">
+          <circle cx="44" cy="44" r={r} fill="none" stroke="var(--color-surface-elevated)" strokeWidth="10" />
+          <circle cx="44" cy="44" r={r} fill="none" stroke="var(--color-accent)" strokeWidth="10"
+            strokeDasharray={`${(pct / 100) * circ} ${circ}`} strokeLinecap="round" transform="rotate(-90 44 44)" />
+          <text x="44" y="40" textAnchor="middle" fontSize="15" fontWeight="800" fill="var(--color-fg)">{Math.round(pct)}%</text>
+          <text x="44" y="55" textAnchor="middle" fontSize="9" fill="var(--color-fg-subtle)">progression</text>
+        </svg>
+        <div className="flex flex-col gap-3 flex-1 min-w-0">
+          <div>
+            <p className="text-2xl font-bold text-accent tabular-nums">{fmt(total)} €</p>
+            <p className="text-xs text-fg-subtle mt-0.5">épargné sur {fmt(totalTgt)} €</p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-xl bg-surface-elevated px-3 py-2">
+              <p className="text-base font-bold text-blue-400 tabular-nums">{active}</p>
+              <p className="text-[10px] text-fg-subtle">en cours</p>
+            </div>
+            <div className="rounded-xl bg-surface-elevated px-3 py-2">
+              <p className="text-base font-bold text-emerald-400 tabular-nums">{completed}</p>
+              <p className="text-[10px] text-fg-subtle">complétés</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function PlacementsSummaryCard({ placements }: { placements: SavingsPlacement[] }) {
+  const groups = PLACEMENT_TYPES
+    .map(t => ({
+      value: t.value, label: t.label,
+      color: PLACEMENT_TYPE_COLORS[t.value] ?? "#9D9890",
+      total: placements.filter(p => p.type === t.value).reduce((s, p) => s + p.current_value, 0),
+    }))
+    .filter(g => g.total > 0);
+
+  const grandTotal = groups.reduce((s, g) => s + g.total, 0);
+  const totalGain  = placements.reduce((s, p) => s + (p.current_value - p.initial_deposit), 0);
+  if (groups.length === 0) return null;
+
+  const r = 32; const circ = 2 * Math.PI * r;
+  let cumPct = 0;
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+      className="rounded-2xl border border-surface-border bg-surface-card p-4 mb-2">
+      <p className="text-xs font-semibold text-fg-subtle uppercase tracking-wider mb-3">Répartition</p>
+      <div className="flex items-center gap-5">
+        <svg width="84" height="84" viewBox="0 0 84 84" className="flex-shrink-0">
+          {groups.map((seg, i) => {
+            const pct    = seg.total / grandTotal;
+            const dash   = pct * circ;
+            const gap    = circ - dash;
+            const rot    = -90 + cumPct * 360;
+            cumPct += pct;
+            return (
+              <circle key={i} cx="42" cy="42" r={r} fill="none" stroke={seg.color}
+                strokeWidth="14" strokeDasharray={`${dash} ${gap}`} transform={`rotate(${rot} 42 42)`} />
+            );
+          })}
+          <circle cx="42" cy="42" r="24" fill="var(--color-surface-card)" />
+        </svg>
+        <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+          {groups.map(seg => (
+            <div key={seg.value} className="flex items-center gap-2">
+              <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: seg.color }} />
+              <span className="text-xs text-fg-subtle flex-1 truncate">{seg.label}</span>
+              <span className="text-xs font-semibold text-fg tabular-nums">{fmt(seg.total)} €</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="mt-3 pt-3 border-t border-surface-border flex items-center justify-between">
+        <span className="text-xs text-fg-subtle">Plus-value totale</span>
+        <span className={`text-sm font-bold tabular-nums ${totalGain >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+          {totalGain >= 0 ? "+" : ""}{fmt(totalGain)} €
+        </span>
+      </div>
+    </motion.div>
+  );
 }
 
 function EmptyState({ icon, title, desc, onAdd, addLabel }: {
@@ -228,6 +328,17 @@ function PlacementCard({ placement, onEdit, onDelete, onUpdate }: {
               Taux annuel : <span className="font-semibold text-fg">{placement.annual_rate}%</span>
             </div>
           )}
+          {placement.annual_rate !== null && placement.annual_rate > 0 && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl mt-1" style={{ background: `${placement.color}12` }}>
+              <TrendingUpIcon className="w-3.5 h-3.5 flex-shrink-0" style={{ color: placement.color }} />
+              <div>
+                <p className="text-[10px] text-fg-subtle">Gain annuel estimé</p>
+                <p className="text-sm font-bold tabular-nums" style={{ color: placement.color }}>
+                  +{fmt(placement.current_value * placement.annual_rate / 100)} €
+                </p>
+              </div>
+            </div>
+          )}
         </div>
         <button onClick={onUpdate}
           className="mt-auto w-full h-10 rounded-xl text-sm font-semibold transition-all active:scale-[0.97] flex items-center justify-center gap-1.5"
@@ -244,6 +355,7 @@ export function SavingsPage({ onLogout, userId, activeItem, onNavigate }: Saving
   const [goals, setGoals] = useState<SavingsGoal[]>([]);
   const [placements, setPlacements] = useState<SavingsPlacement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [showProfile, setShowProfile] = useState(false);
   const [userProfile, setUserProfile] = useState<{ firstName: string; lastName: string; email: string } | null>(null);
 
   const [goalModalOpen, setGoalModalOpen] = useState(false);
@@ -272,13 +384,14 @@ export function SavingsPage({ onLogout, userId, activeItem, onNavigate }: Saving
   useEffect(() => {
     let mounted = true;
     async function load() {
-      const [{ data: profile }, { data: goalData }, { data: placementData }] = await Promise.all([
+      const [{ data: { user } }, { data: profile }, { data: goalData }, { data: placementData }] = await Promise.all([
+        supabase.auth.getUser(),
         supabase.from("profiles").select("first_name, last_name").eq("id", userId).single(),
         supabase.from("savings_goals").select("*").order("created_at", { ascending: false }),
         supabase.from("savings_placements").select("*").order("created_at", { ascending: false }),
       ]);
       if (!mounted) return;
-      if (profile) setUserProfile({ firstName: profile.first_name ?? "", lastName: profile.last_name ?? "", email: "" });
+      if (profile) setUserProfile({ firstName: profile.first_name ?? "", lastName: profile.last_name ?? "", email: user?.email ?? "" });
       setGoals((goalData ?? []) as SavingsGoal[]);
       setPlacements((placementData ?? []) as SavingsPlacement[]);
       setIsLoading(false);
@@ -446,9 +559,18 @@ export function SavingsPage({ onLogout, userId, activeItem, onNavigate }: Saving
       <main className="lg:ml-[var(--sidebar-width)] transition-all duration-200">
         <header className="sticky top-0 z-20 glass border-b border-surface-border">
           <div className="flex items-center justify-between px-4 py-3.5 lg:px-8 lg:py-4">
-            <div className="ml-12 lg:ml-0">
-              <motion.h1 initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="text-base font-semibold text-fg">Épargne</motion.h1>
-              <p className="text-[11px] text-fg-subtle mt-0.5">Objectifs et placements financiers</p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowProfile(true)}
+                className="lg:hidden w-9 h-9 rounded-lg bg-accent/10 border border-accent/25 flex items-center justify-center text-xs font-bold text-accent hover:bg-accent/15 transition-colors flex-shrink-0"
+                aria-label="Mon profil"
+              >
+                {getInitials(userProfile)}
+              </button>
+              <div>
+                <motion.h1 initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="text-base font-semibold text-fg">Épargne</motion.h1>
+                <p className="text-[11px] text-fg-subtle mt-0.5">Objectifs et placements financiers</p>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -466,19 +588,23 @@ export function SavingsPage({ onLogout, userId, activeItem, onNavigate }: Saving
 
         <div className="px-4 py-5 lg:px-8 lg:py-8 space-y-5 pb-24">
           {/* Tab switcher */}
-          <div className="flex gap-1 p-1 rounded-xl bg-surface-elevated border border-surface-border w-fit">
+          <div className="relative flex rounded-2xl bg-surface-elevated border border-surface-border p-1">
+            <motion.div
+              className="absolute top-1 bottom-1 rounded-xl bg-surface-card border border-surface-border shadow-sm"
+              style={{ width: "calc(50% - 4px)" }}
+              animate={{ x: activeTab === "goals" ? 0 : "calc(100% + 4px)" }}
+              transition={{ type: "spring", stiffness: 420, damping: 36 }}
+            />
             {(["goals", "placements"] as const).map(tab => (
               <button key={tab} onClick={() => setActiveTab(tab)}
-                className={`relative px-5 py-1.5 text-sm font-medium rounded-lg transition-colors ${activeTab === tab ? "text-fg" : "text-fg-muted hover:text-fg"}`}
+                className={`relative flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-xl transition-colors z-10 ${
+                  activeTab === tab ? "text-fg" : "text-fg-muted hover:text-fg"
+                }`}
               >
-                <motion.span
-                  animate={{ opacity: activeTab === tab ? 1 : 0 }}
-                  transition={{ duration: 0.15 }}
-                  className="absolute inset-0 bg-surface-card border border-surface-border rounded-lg shadow-sm pointer-events-none"
-                />
-                <span className="relative flex items-center gap-1.5">
-                  {tab === "goals" ? <><PiggyBankIcon className="w-3.5 h-3.5" />Objectifs</> : <><TrendingUpIcon className="w-3.5 h-3.5" />Placements</>}
-                </span>
+                {tab === "goals"
+                  ? <><PiggyBankIcon className="w-4 h-4" /><span>Objectifs</span></>
+                  : <><TrendingUpIcon className="w-4 h-4" /><span>Placements</span></>
+                }
               </button>
             ))}
           </div>
@@ -501,7 +627,7 @@ export function SavingsPage({ onLogout, userId, activeItem, onNavigate }: Saving
           </div>
 
           {/* Tab content */}
-          <AnimatePresence>
+          <AnimatePresence mode="wait">
             <motion.div key={activeTab}
               initial={{ opacity: 0, x: activeTab === "goals" ? -20 : 20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -515,19 +641,25 @@ export function SavingsPage({ onLogout, userId, activeItem, onNavigate }: Saving
               ) : activeTab === "goals" ? (
                 goals.length === 0
                   ? <EmptyState icon={<PiggyBankIcon className="w-10 h-10 text-accent" />} title="Aucun objectif d'épargne" desc="Créez votre premier objectif pour commencer à épargner." onAdd={openGoalCreate} addLabel="Créer un objectif" />
-                  : <motion.div layout className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                      <AnimatePresence mode="popLayout">
-                        {goals.map(g => <GoalCard key={g.id} goal={g} onEdit={() => openGoalEdit(g)} onDelete={() => setDeleteGoal(g)} onDeposit={() => setDepositGoal(g)} />)}
-                      </AnimatePresence>
-                    </motion.div>
+                  : <>
+                      <GoalsSummaryCard goals={goals} />
+                      <motion.div layout className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mt-4">
+                        <AnimatePresence mode="popLayout">
+                          {goals.map(g => <GoalCard key={g.id} goal={g} onEdit={() => openGoalEdit(g)} onDelete={() => setDeleteGoal(g)} onDeposit={() => setDepositGoal(g)} />)}
+                        </AnimatePresence>
+                      </motion.div>
+                    </>
               ) : (
                 placements.length === 0
                   ? <EmptyState icon={<TrendingUpIcon className="w-10 h-10 text-accent" />} title="Aucun placement" desc="Ajoutez votre premier placement pour suivre vos investissements." onAdd={openPlacementCreate} addLabel="Ajouter un placement" />
-                  : <motion.div layout className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                      <AnimatePresence mode="popLayout">
-                        {placements.map(p => <PlacementCard key={p.id} placement={p} onEdit={() => openPlacementEdit(p)} onDelete={() => setDeletePlacement(p)} onUpdate={() => setUpdatePlacement(p)} />)}
-                      </AnimatePresence>
-                    </motion.div>
+                  : <>
+                      <PlacementsSummaryCard placements={placements} />
+                      <motion.div layout className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mt-4">
+                        <AnimatePresence mode="popLayout">
+                          {placements.map(p => <PlacementCard key={p.id} placement={p} onEdit={() => openPlacementEdit(p)} onDelete={() => setDeletePlacement(p)} onUpdate={() => setUpdatePlacement(p)} />)}
+                        </AnimatePresence>
+                      </motion.div>
+                    </>
               )}
             </motion.div>
           </AnimatePresence>
@@ -801,6 +933,7 @@ export function SavingsPage({ onLogout, userId, activeItem, onNavigate }: Saving
           </>
         )}
       </AnimatePresence>
+      <ProfileSheet isOpen={showProfile} onClose={() => setShowProfile(false)} userProfile={userProfile} onNavigate={p => { setShowProfile(false); onNavigate?.(p); }} onLogout={onLogout} />
     </div>
   );
 }

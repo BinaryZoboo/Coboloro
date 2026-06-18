@@ -15,6 +15,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { DailySpendingChart } from "../components/DailySpendingChart";
 import { MobileSpendingPie } from "../components/MobileSpendingPie";
 import { NotificationBell } from "../components/NotificationBell";
+import { ProfileSheet, getInitials } from "../components/ProfileSheet";
 import { Sidebar } from "../components/Sidebar";
 import { supabase } from "../lib/supabaseClient";
 import type { Category } from "../transaction";
@@ -283,6 +284,7 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate }: BudgetP
   const [recurringBudgets, setRecurringBudgets] = useState<RecurringBudget[]>([]);
   const [savingsItems, setSavingsItems] = useState<SimpleSavingsItem[]>([]);
   const [savingsBudgetItems, setSavingsBudgetItems] = useState<SavingsBudgetItem[]>([]);
+  const [showProfile, setShowProfile] = useState(false);
   const [userProfile, setUserProfile] = useState<{ firstName: string; lastName: string; email: string } | null>(null);
   const [activeMonthStart, setActiveMonthStart] = useState(() => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), 1); });
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -523,7 +525,16 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate }: BudgetP
       <main className="lg:ml-[var(--sidebar-width)] transition-all duration-200 flex flex-col min-h-screen">
         <header className="sticky top-0 z-20 glass border-b border-surface-border flex-shrink-0">
           <div className="flex items-center justify-between px-4 py-3.5 lg:px-8 lg:py-4">
-            <h1 className="text-sm lg:text-base font-semibold text-fg">Budget</h1>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowProfile(true)}
+                className="lg:hidden w-9 h-9 rounded-lg bg-accent/10 border border-accent/25 flex items-center justify-center text-xs font-bold text-accent hover:bg-accent/15 transition-colors flex-shrink-0"
+                aria-label="Mon profil"
+              >
+                {getInitials(userProfile)}
+              </button>
+              <h1 className="text-sm lg:text-base font-semibold text-fg">Budget</h1>
+            </div>
             <div className="flex items-center gap-1.5">
               <button onClick={() => setActiveMonthStart((d) => addMonthsToDate(d, -1))} className="w-8 h-8 flex items-center justify-center rounded-lg text-fg-muted hover:text-fg hover:bg-surface-hover transition-colors" aria-label="Mois précédent">
                 <ArrowLeftIcon className="w-4 h-4" />
@@ -877,6 +888,7 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate }: BudgetP
           </div>
         </div>
       </main>
+      <ProfileSheet isOpen={showProfile} onClose={() => setShowProfile(false)} userProfile={userProfile} onNavigate={p => { setShowProfile(false); onNavigate?.(p); }} onLogout={onLogout} />
     </div>
   );
 }
