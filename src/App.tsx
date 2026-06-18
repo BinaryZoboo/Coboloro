@@ -203,8 +203,6 @@ export function App() {
         <BottomNav
           activePage={activePage}
           onNavigate={navigate}
-          onLogout={() => supabase.auth.signOut()}
-          userProfile={userProfile}
         />
       )}
 

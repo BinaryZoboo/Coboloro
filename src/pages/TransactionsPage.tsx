@@ -14,6 +14,7 @@ import {
   Trash2Icon,
   XIcon,
 } from "lucide-react";
+import { ProfileSheet, getInitials } from "../components/ProfileSheet";
 import { useEffect, useMemo, useState } from "react";
 import { AddTransactionModal } from "../components/AddTransactionModal";
 import { DailySpendingChart } from "../components/DailySpendingChart";
@@ -132,6 +133,7 @@ export function TransactionsPage({ onLogout, userId, activeItem, onNavigate }: T
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showFilterSheet, setShowFilterSheet] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const [userProfile, setUserProfile] = useState<{
     firstName: string;
     lastName: string;
@@ -359,16 +361,25 @@ export function TransactionsPage({ onLogout, userId, activeItem, onNavigate }: T
       <main className="lg:ml-[var(--sidebar-width)] transition-all duration-200">
         <header className="sticky top-0 z-20 glass border-b border-surface-border">
           <div className="flex items-center justify-between gap-3 px-5 py-4 lg:px-8">
-            <div className="min-w-0">
-              <motion.h1
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25 }}
-                className="text-base font-semibold text-fg"
+            <div className="flex items-center gap-3 min-w-0">
+              <button
+                onClick={() => setShowProfile(true)}
+                className="lg:hidden w-9 h-9 rounded-lg bg-accent/10 border border-accent/25 flex items-center justify-center text-xs font-bold text-accent hover:bg-accent/15 transition-colors flex-shrink-0"
+                aria-label="Mon profil"
               >
-                Transactions
-              </motion.h1>
-              <p className="text-xs text-fg-subtle mt-0.5">{filteredTransactions.length} transaction{filteredTransactions.length > 1 ? "s" : ""}</p>
+                {getInitials(userProfile)}
+              </button>
+              <div className="min-w-0">
+                <motion.h1
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25 }}
+                  className="text-base font-semibold text-fg"
+                >
+                  Transactions
+                </motion.h1>
+                <p className="text-xs text-fg-subtle mt-0.5">{filteredTransactions.length} transaction{filteredTransactions.length > 1 ? "s" : ""}</p>
+              </div>
             </div>
 
             <div className="hidden lg:flex items-center gap-2 flex-1 justify-center mx-6">
@@ -716,6 +727,7 @@ export function TransactionsPage({ onLogout, userId, activeItem, onNavigate }: T
       </AnimatePresence>
 
       <AddTransactionModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSubmit={handleAddTransaction} categories={categories} />
+      <ProfileSheet isOpen={showProfile} onClose={() => setShowProfile(false)} userProfile={userProfile} onNavigate={p => { setShowProfile(false); onNavigate?.(p); }} onLogout={onLogout} />
     </div>
   );
 }

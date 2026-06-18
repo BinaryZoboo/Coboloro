@@ -6,11 +6,11 @@ import {
   ArrowUpIcon,
   CalendarIcon,
   PiggyBankIcon,
-  PlusIcon,
   TrendingUpIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { AddTransactionModal } from "../components/AddTransactionModal";
+import { ProfileSheet, getInitials } from "../components/ProfileSheet";
 import { DailySpendingChart } from "../components/DailySpendingChart";
 import { MobileSpendingPie } from "../components/MobileSpendingPie";
 import { MonthlyTrendChart } from "../components/MonthlyTrendChart";
@@ -97,12 +97,21 @@ function formatMonthLabel(key: string) {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-function SavingsWidget({ goals }: { goals: SavingsGoal[] }) {
+function SavingsWidget({ goals, onViewAll }: { goals: SavingsGoal[]; onViewAll?: () => void }) {
   const total    = goals.reduce((s, g) => s + g.current_amount, 0);
   const totalTgt = goals.reduce((s, g) => s + g.target_amount, 0);
   const globalPct = totalTgt > 0 ? Math.round((total / totalTgt) * 100) : 0;
   const fmt = (n: number) => n.toLocaleString("fr-FR", { maximumFractionDigits: 0 });
-  const circumference = 2 * Math.PI * 14;
+  const r = 26;
+  const circumference = 2 * Math.PI * r;
+
+  // Top 3 goals sorted by progress % (highest first)
+  const sorted = [...goals].sort((a, b) => {
+    const pa = a.target_amount > 0 ? a.current_amount / a.target_amount : 0;
+    const pb = b.target_amount > 0 ? b.current_amount / b.target_amount : 0;
+    return pb - pa;
+  });
+  const shown = sorted.slice(0, 3);
 
   return (
     <motion.div
@@ -117,68 +126,72 @@ function SavingsWidget({ goals }: { goals: SavingsGoal[] }) {
           <PiggyBankIcon className="w-4 h-4 text-accent" />
           <span className="text-sm font-semibold text-fg">Épargne</span>
         </div>
-        <span className="text-xs font-semibold text-accent">
-          {fmt(total)} € épargnés
-        </span>
+        {onViewAll && (
+          <button onClick={onViewAll} className="text-xs font-medium text-accent hover:underline">
+            Voir tout →
+          </button>
+        )}
       </div>
 
-      {/* Barres de progression */}
-      <div className="space-y-2.5 mb-4">
-        {goals.map((g) => {
-          const pct = g.target_amount > 0
-            ? Math.min((g.current_amount / g.target_amount) * 100, 100)
-            : 0;
-          return (
-            <div key={g.id}>
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-xs text-fg-subtle">
-                  {g.emoji} {g.name}
-                </span>
-                <span className="text-xs font-semibold" style={{ color: g.color }}>
-                  {fmt(g.current_amount)}{" "}
-                  <span className="text-fg-disabled font-normal">
-                    / {fmt(g.target_amount)} €
-                  </span>
-                </span>
-              </div>
-              <div className="h-1.5 rounded-full bg-surface-elevated overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all duration-700"
-                  style={{
-                    width: `${pct}%`,
-                    background: `linear-gradient(90deg, ${g.color}70, ${g.color})`,
-                  }}
-                />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Synthèse globale */}
-      <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-surface-elevated">
-        <svg width="36" height="36" viewBox="0 0 36 36" className="flex-shrink-0">
-          <circle cx="18" cy="18" r="14" fill="none" stroke="var(--color-surface-border)" strokeWidth="4" />
-          <circle
-            cx="18" cy="18" r="14"
-            fill="none"
-            stroke="var(--color-accent)"
-            strokeWidth="4"
-            strokeDasharray={`${(globalPct / 100) * circumference} ${circumference}`}
-            strokeLinecap="round"
-            transform="rotate(-90 18 18)"
-          />
-          <text x="18" y="22" textAnchor="middle" fontSize="9" fontWeight="700" fill="var(--color-accent)">
-            {globalPct}%
-          </text>
-        </svg>
-        <div>
-          <p className="text-xs font-semibold text-fg">
-            {fmt(total)} € / {fmt(totalTgt)} €
-          </p>
-          <p className="text-[10px] text-fg-subtle mt-0.5">Progression globale</p>
+      {goals.length === 0 ? (
+        <div className="py-4 text-center">
+          <p className="text-xs text-fg-subtle mb-2">Aucun objectif d'épargne</p>
+          {onViewAll && (
+            <button onClick={onViewAll} className="text-xs font-semibold text-accent hover:underline">
+              Créer un objectif →
+            </button>
+          )}
         </div>
-      </div>
+      ) : (
+        <>
+          {/* Donut + totaux */}
+          <div className="flex items-center gap-3 px-3 py-3 rounded-xl bg-surface-elevated mb-3">
+            <svg width="64" height="64" viewBox="0 0 64 64" className="flex-shrink-0">
+              <circle cx="32" cy="32" r={r} fill="none" stroke="var(--color-surface-border)" strokeWidth="6" />
+              <circle
+                cx="32" cy="32" r={r}
+                fill="none"
+                stroke="var(--color-accent)"
+                strokeWidth="6"
+                strokeDasharray={`${(globalPct / 100) * circumference} ${circumference}`}
+                strokeLinecap="round"
+                transform="rotate(-90 32 32)"
+              />
+              <text x="32" y="29" textAnchor="middle" fontSize="13" fontWeight="800" fill="var(--color-accent)">{globalPct}%</text>
+              <text x="32" y="42" textAnchor="middle" fontSize="8" fill="var(--color-fg-subtle)">global</text>
+            </svg>
+            <div>
+              <p className="text-lg font-bold text-fg tabular-nums">{fmt(total)} €</p>
+              <p className="text-xs text-fg-subtle mt-0.5">sur {fmt(totalTgt)} € total</p>
+              <p className="text-[10px] text-fg-disabled mt-1">{goals.length} objectif{goals.length > 1 ? "s" : ""}</p>
+            </div>
+          </div>
+
+          {/* Top 3 goals */}
+          <div className="space-y-2.5">
+            {shown.map((g) => {
+              const pct = g.target_amount > 0 ? Math.min((g.current_amount / g.target_amount) * 100, 100) : 0;
+              return (
+                <div key={g.id}>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-xs text-fg-subtle truncate mr-2">{g.emoji} {g.name}</span>
+                    <span className="text-xs font-semibold tabular-nums flex-shrink-0" style={{ color: g.color }}>
+                      {fmt(g.current_amount)} <span className="text-fg-disabled font-normal">/ {fmt(g.target_amount)} €</span>
+                    </span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-surface-elevated overflow-hidden">
+                    <div className="h-full rounded-full transition-all duration-700"
+                      style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${g.color}70, ${g.color})` }} />
+                  </div>
+                </div>
+              );
+            })}
+            {goals.length > 3 && (
+              <p className="text-[10px] text-fg-disabled text-center">+{goals.length - 3} autre{goals.length - 3 > 1 ? "s" : ""}</p>
+            )}
+          </div>
+        </>
+      )}
     </motion.div>
   );
 }
@@ -237,6 +250,7 @@ export function DashboardPage({ onLogout, userId, activeItem, onNavigate }: Dash
     email: string;
   } | null>(null);
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>([]);
+  const [showProfile, setShowProfile] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -381,13 +395,24 @@ export function DashboardPage({ onLogout, userId, activeItem, onNavigate }: Dash
       <main className="lg:ml-[var(--sidebar-width)] transition-all duration-200">
         <header className="sticky top-0 z-20 glass border-b border-surface-border">
           <div className="flex items-center justify-between px-4 py-3.5 lg:px-8 lg:py-4">
-            <div>
-              <motion.h1 initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="text-sm lg:text-base font-semibold text-fg">
-                Bonjour, {userProfile?.firstName || "vous"} 👋
-              </motion.h1>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <CalendarIcon className="w-3 h-3 text-fg-subtle" />
-                <p className="text-[10px] text-fg-subtle capitalize">{todayLabel}</p>
+            <div className="flex items-center gap-3">
+              {/* Mobile: avatar ouvre le profil */}
+              <button
+                onClick={() => setShowProfile(true)}
+                className="lg:hidden w-9 h-9 rounded-lg bg-accent/10 border border-accent/25 flex items-center justify-center text-xs font-bold text-accent hover:bg-accent/15 transition-colors flex-shrink-0"
+                aria-label="Mon profil"
+              >
+                {getInitials(userProfile)}
+              </button>
+              {/* Desktop: salutation */}
+              <div className="hidden lg:block">
+                <motion.h1 initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="text-base font-semibold text-fg">
+                  Bonjour, {userProfile?.firstName || "vous"} 👋
+                </motion.h1>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <CalendarIcon className="w-3 h-3 text-fg-subtle" />
+                  <p className="text-[10px] text-fg-subtle capitalize">{todayLabel}</p>
+                </div>
               </div>
             </div>
 
@@ -398,10 +423,6 @@ export function DashboardPage({ onLogout, userId, activeItem, onNavigate }: Dash
               <span className="text-xs font-medium text-fg min-w-[80px] text-center hidden sm:inline">{formatMonthLabel(selectedMonthKey)}</span>
               <button onClick={() => setSelectedMonthKey((k) => addMonths(k, 1))} className="w-8 h-8 flex items-center justify-center rounded-lg text-fg-muted hover:text-fg hover:bg-surface-hover transition-colors" aria-label="Mois suivant">
                 <ArrowRightIcon className="w-4 h-4" />
-              </button>
-              <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent text-accent-fg text-xs font-semibold hover:bg-accent-light transition-colors min-h-[44px]" style={{ boxShadow: "var(--shadow-accent-sm)" }}>
-                <PlusIcon className="w-4 h-4" />
-                <span className="hidden sm:inline">Ajouter</span>
               </button>
               <NotificationBell userId={userId} />
             </div>
@@ -416,12 +437,10 @@ export function DashboardPage({ onLogout, userId, activeItem, onNavigate }: Dash
             <KpiCard label={monthlyBudgetTotal > 0 ? "Budget restant" : "Économies"} value={monthlyBudgetTotal > 0 ? selBudgetRestant : selNetBalance} color={monthlyBudgetTotal > 0 ? (selBudgetRestant > 0 ? "green" : "red") : "accent"} delay={0.15} />
           </div>
 
-          {/* Widget épargne — mobile uniquement, entre KPIs et graphique dépenses */}
-          {savingsGoals.length > 0 && (
-            <div className="lg:hidden">
-              <SavingsWidget goals={savingsGoals} />
-            </div>
-          )}
+          {/* Widget épargne — mobile uniquement */}
+          <div className="lg:hidden">
+            <SavingsWidget goals={savingsGoals} onViewAll={() => onNavigate?.("savings")} />
+          </div>
 
           {/* Mobile: pie + recent transactions */}
           <div className="lg:hidden space-y-4">
@@ -473,6 +492,7 @@ export function DashboardPage({ onLogout, userId, activeItem, onNavigate }: Dash
       </main>
 
       <AddTransactionModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSubmit={handleAddTransaction} categories={categories} />
+      <ProfileSheet isOpen={showProfile} onClose={() => setShowProfile(false)} userProfile={userProfile} onNavigate={p => { setShowProfile(false); onNavigate?.(p); }} onLogout={onLogout} />
     </div>
   );
 }
