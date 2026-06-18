@@ -56,7 +56,7 @@ export function CategoriesPage({
       if (error) { console.error("Failed to load profile", error); return; }
       if (data && isMounted) {
         setUserProfile({
-          firstName: data.first_name || "Utilisateur",
+          firstName: data.first_name || "",
           lastName: data.last_name || "",
           email: user.user.email,
         });

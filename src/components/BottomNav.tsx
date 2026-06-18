@@ -7,7 +7,6 @@ import {
   PiggyBankIcon,
   PlusIcon,
   SunIcon,
-  UserIcon,
   WalletIcon,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -27,11 +26,11 @@ interface Tab {
 }
 
 const tabs: Tab[] = [
-  { id: "dashboard",    label: "Accueil",    Icon: LayoutDashboardIcon },
-  { id: "transactions", label: "Historique", Icon: ArrowLeftRightIcon },
-  { id: "quick-entry",  label: "",           Icon: PlusIcon, isCta: true },
-  { id: "budget",       label: "Budget",     Icon: WalletIcon },
-  { id: "profil",       label: "Profil",     Icon: UserIcon },
+  { id: "dashboard",    label: "Accueil",      Icon: LayoutDashboardIcon },
+  { id: "transactions", label: "Transactions",  Icon: ArrowLeftRightIcon },
+  { id: "quick-entry",  label: "",             Icon: PlusIcon, isCta: true },
+  { id: "budget",       label: "Budget",       Icon: WalletIcon },
+  { id: "savings",      label: "Épargne",      Icon: PiggyBankIcon },
 ];
 
 export function BottomNav({ activePage, onNavigate, onLogout, userProfile }: BottomNavProps) {
@@ -46,19 +45,19 @@ export function BottomNav({ activePage, onNavigate, onLogout, userProfile }: Bot
     try { localStorage.setItem("theme", theme); } catch {}
   }, [theme]);
 
+  const emailFallback = userProfile?.email?.split("@")[0] ?? "Utilisateur";
+
   const initials = (() => {
     if (!userProfile) return "U";
-    return ((userProfile.firstName?.[0] ?? "") + (userProfile.lastName?.[0] ?? "")).toUpperCase() || "U";
+    const fromName = ((userProfile.firstName?.[0] ?? "") + (userProfile.lastName?.[0] ?? "")).toUpperCase();
+    return fromName || emailFallback[0]?.toUpperCase() || "U";
   })();
 
   const fullName = userProfile
-    ? `${userProfile.firstName} ${userProfile.lastName}`.trim() || "Utilisateur"
+    ? `${userProfile.firstName} ${userProfile.lastName}`.trim() || emailFallback
     : "Utilisateur";
 
-  const handleTab = (id: string) => {
-    if (id === "profil") { setShowProfile(true); return; }
-    onNavigate(id);
-  };
+  const handleTab = (id: string) => onNavigate(id);
 
   const isQuickEntry = activePage === "quick-entry";
 
@@ -151,14 +150,6 @@ export function BottomNav({ activePage, onNavigate, onLogout, userProfile }: Bot
               </div>
 
               <div className="p-4 space-y-2">
-                <button
-                  onClick={() => { setShowProfile(false); onNavigate("savings"); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-surface-elevated text-sm text-fg-secondary hover:text-fg hover:bg-surface-hover transition-colors min-h-[44px]"
-                >
-                  <PiggyBankIcon className="w-4 h-4" />
-                  Épargne
-                </button>
-
                 <button
                   onClick={() => { setShowProfile(false); onNavigate("categories"); }}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-surface-elevated text-sm text-fg-secondary hover:text-fg hover:bg-surface-hover transition-colors min-h-[44px]"

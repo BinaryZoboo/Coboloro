@@ -5,6 +5,7 @@ import {
   ArrowRightIcon,
   ArrowUpIcon,
   CalendarIcon,
+  PiggyBankIcon,
   PlusIcon,
   TrendingUpIcon,
 } from "lucide-react";
@@ -23,6 +24,15 @@ import type {
   NewTransactionInput,
   Transaction,
 } from "../transaction";
+
+interface SavingsGoal {
+  id: string;
+  name: string;
+  current_amount: number;
+  target_amount: number;
+  color: string;
+  emoji: string;
+}
 
 interface DashboardPageProps {
   onLogout: () => void;
@@ -87,6 +97,92 @@ function formatMonthLabel(key: string) {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
+function SavingsWidget({ goals }: { goals: SavingsGoal[] }) {
+  const total    = goals.reduce((s, g) => s + g.current_amount, 0);
+  const totalTgt = goals.reduce((s, g) => s + g.target_amount, 0);
+  const globalPct = totalTgt > 0 ? Math.round((total / totalTgt) * 100) : 0;
+  const fmt = (n: number) => n.toLocaleString("fr-FR", { maximumFractionDigits: 0 });
+  const circumference = 2 * Math.PI * 14;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.22, delay: 0.18 }}
+      className="rounded-2xl border border-surface-border bg-surface-card p-4"
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <PiggyBankIcon className="w-4 h-4 text-accent" />
+          <span className="text-sm font-semibold text-fg">Épargne</span>
+        </div>
+        <span className="text-xs font-semibold text-accent">
+          {fmt(total)} € épargnés
+        </span>
+      </div>
+
+      {/* Barres de progression */}
+      <div className="space-y-2.5 mb-4">
+        {goals.map((g) => {
+          const pct = g.target_amount > 0
+            ? Math.min((g.current_amount / g.target_amount) * 100, 100)
+            : 0;
+          return (
+            <div key={g.id}>
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-xs text-fg-subtle">
+                  {g.emoji} {g.name}
+                </span>
+                <span className="text-xs font-semibold" style={{ color: g.color }}>
+                  {fmt(g.current_amount)}{" "}
+                  <span className="text-fg-disabled font-normal">
+                    / {fmt(g.target_amount)} €
+                  </span>
+                </span>
+              </div>
+              <div className="h-1.5 rounded-full bg-surface-elevated overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-700"
+                  style={{
+                    width: `${pct}%`,
+                    background: `linear-gradient(90deg, ${g.color}70, ${g.color})`,
+                  }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Synthèse globale */}
+      <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-surface-elevated">
+        <svg width="36" height="36" viewBox="0 0 36 36" className="flex-shrink-0">
+          <circle cx="18" cy="18" r="14" fill="none" stroke="var(--color-surface-border)" strokeWidth="4" />
+          <circle
+            cx="18" cy="18" r="14"
+            fill="none"
+            stroke="var(--color-accent)"
+            strokeWidth="4"
+            strokeDasharray={`${(globalPct / 100) * circumference} ${circumference}`}
+            strokeLinecap="round"
+            transform="rotate(-90 18 18)"
+          />
+          <text x="18" y="22" textAnchor="middle" fontSize="9" fontWeight="700" fill="var(--color-accent)">
+            {globalPct}%
+          </text>
+        </svg>
+        <div>
+          <p className="text-xs font-semibold text-fg">
+            {fmt(total)} € / {fmt(totalTgt)} €
+          </p>
+          <p className="text-[10px] text-fg-subtle mt-0.5">Progression globale</p>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 interface KpiCardProps {
   label: string;
   value: number;
@@ -140,6 +236,7 @@ export function DashboardPage({ onLogout, userId, activeItem, onNavigate }: Dash
     lastName: string;
     email: string;
   } | null>(null);
+  const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>([]);
 
   useEffect(() => {
     let mounted = true;
@@ -149,7 +246,7 @@ export function DashboardPage({ onLogout, userId, activeItem, onNavigate }: Dash
       if (!user.user?.email) return;
       const { data } = await supabase.from("profiles").select("first_name, last_name").eq("id", userId).single();
       if (data && mounted) {
-        setUserProfile({ firstName: data.first_name || "Utilisateur", lastName: data.last_name || "", email: user.user.email });
+        setUserProfile({ firstName: data.first_name || "", lastName: data.last_name || "", email: user.user.email });
       }
     }
 
@@ -175,9 +272,18 @@ export function DashboardPage({ onLogout, userId, activeItem, onNavigate }: Dash
       }));
     }
 
+    async function loadSavingsGoals() {
+      const { data } = await supabase
+        .from("savings_goals")
+        .select("id, name, current_amount, target_amount, color, emoji")
+        .order("created_at", { ascending: true });
+      if (data && mounted) setSavingsGoals(data as SavingsGoal[]);
+    }
+
     void loadProfile();
     void loadCategories();
     void loadTransactions();
+    void loadSavingsGoals();
     return () => { mounted = false; };
   }, [userId]);
 
@@ -309,6 +415,13 @@ export function DashboardPage({ onLogout, userId, activeItem, onNavigate }: Dash
             <KpiCard label="Revenus" value={selIncome} color="blue" delay={0.1} />
             <KpiCard label={monthlyBudgetTotal > 0 ? "Budget restant" : "Économies"} value={monthlyBudgetTotal > 0 ? selBudgetRestant : selNetBalance} color={monthlyBudgetTotal > 0 ? (selBudgetRestant > 0 ? "green" : "red") : "accent"} delay={0.15} />
           </div>
+
+          {/* Widget épargne — mobile uniquement, entre KPIs et graphique dépenses */}
+          {savingsGoals.length > 0 && (
+            <div className="lg:hidden">
+              <SavingsWidget goals={savingsGoals} />
+            </div>
+          )}
 
           {/* Mobile: pie + recent transactions */}
           <div className="lg:hidden space-y-4">
