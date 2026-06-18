@@ -53,6 +53,8 @@ export function BottomNav({ activePage, onNavigate, onLogout, userProfile }: Bot
     return fromName || emailFallback[0]?.toUpperCase() || "U";
   })();
 
+  const emailFallback = userProfile?.email?.split("@")[0] ?? "Utilisateur";
+
   const fullName = userProfile
     ? `${userProfile.firstName} ${userProfile.lastName}`.trim() || emailFallback
     : "Utilisateur";
