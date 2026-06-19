@@ -1,6 +1,5 @@
 import { motion } from "framer-motion";
 import {
-  CalendarIcon,
   PlusIcon,
   SaveIcon,
   Trash2Icon,
@@ -8,6 +7,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { NotificationBell } from "../components/NotificationBell";
+import { ProfileSheet, getInitials } from "../components/ProfileSheet";
 import { Sidebar } from "../components/Sidebar";
 import { supabase } from "../lib/supabaseClient";
 import type { Category } from "../transaction";
@@ -36,6 +36,7 @@ export function CategoriesPage({
   const [editingType, setEditingType] = useState<Category["type"]>("expense");
   const [isSaving, setIsSaving] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Category | null>(null);
+  const [showProfile, setShowProfile] = useState(false);
   const [userProfile, setUserProfile] = useState<{
     firstName: string;
     lastName: string;
@@ -189,19 +190,25 @@ export function CategoriesPage({
 
       <main className="lg:ml-[var(--sidebar-width)] transition-all duration-200">
         <header className="sticky top-0 z-20 glass border-b border-surface-border">
-          <div className="flex flex-col gap-3 px-6 py-4 lg:px-8 sm:flex-row sm:items-center sm:justify-between">
-            <div className="ml-12 lg:ml-0">
-              <motion.h1
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-                className="text-lg font-semibold text-fg"
+          <div className="flex items-center justify-between px-4 py-3.5 lg:px-8 lg:py-4">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowProfile(true)}
+                className="lg:hidden w-9 h-9 rounded-lg bg-accent/10 border border-accent/25 flex items-center justify-center text-xs font-bold text-accent hover:bg-accent/15 transition-colors flex-shrink-0"
+                aria-label="Mon profil"
               >
-                Categories
-              </motion.h1>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <CalendarIcon className="w-3.5 h-3.5 text-fg-subtle" />
-                <p className="text-xs text-fg-subtle capitalize">{today}</p>
+                {getInitials(userProfile)}
+              </button>
+              <div>
+                <motion.h1
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25 }}
+                  className="text-base font-semibold text-fg"
+                >
+                  Catégories
+                </motion.h1>
+                <p className="text-[10px] text-fg-subtle capitalize hidden lg:block">{today}</p>
               </div>
             </div>
             <NotificationBell userId={userId} />
@@ -389,6 +396,8 @@ export function CategoriesPage({
           </div>
         </div>
       </main>
+
+      <ProfileSheet isOpen={showProfile} onClose={() => setShowProfile(false)} userProfile={userProfile} onNavigate={p => { setShowProfile(false); onNavigate?.(p); }} onLogout={onLogout} />
 
       {pendingDelete ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
