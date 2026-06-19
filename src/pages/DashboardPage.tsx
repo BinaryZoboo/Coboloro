@@ -265,10 +265,10 @@ export function DashboardPage({ onLogout, userId, activeItem, onNavigate }: Dash
     }
 
     async function loadCategories() {
-      const { data } = await supabase.from("categories").select("id, name, type").order("name");
+      const { data } = await supabase.from("categories").select("id, name, type").eq("user_id", userId).order("name");
       if (data && data.length > 0) { if (mounted) setCategories(data as Category[]); return; }
       await supabase.from("categories").insert(defaultCategories.map((c) => ({ ...c, user_id: userId })));
-      const { data: seeded } = await supabase.from("categories").select("id, name, type").order("name");
+      const { data: seeded } = await supabase.from("categories").select("id, name, type").eq("user_id", userId).order("name");
       if (mounted) setCategories((seeded ?? []) as Category[]);
     }
 
@@ -277,6 +277,7 @@ export function DashboardPage({ onLogout, userId, activeItem, onNavigate }: Dash
       const { data } = await supabase
         .from("transactions")
         .select("id, amount, type, date, note, category_id, categories(name)")
+        .eq("user_id", userId)
         .lte("date", today)
         .order("date", { ascending: false });
       if (!mounted || !data) return;
@@ -290,6 +291,7 @@ export function DashboardPage({ onLogout, userId, activeItem, onNavigate }: Dash
       const { data } = await supabase
         .from("savings_goals")
         .select("id, name, current_amount, target_amount, color, emoji")
+        .eq("user_id", userId)
         .order("created_at", { ascending: true });
       if (data && mounted) setSavingsGoals(data as SavingsGoal[]);
     }

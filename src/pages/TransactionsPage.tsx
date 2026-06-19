@@ -174,7 +174,7 @@ export function TransactionsPage({ onLogout, userId, activeItem, onNavigate }: T
     }
 
     async function loadCategories() {
-      const { data } = await supabase.from("categories").select("id, name, type").order("name");
+      const { data } = await supabase.from("categories").select("id, name, type").eq("user_id", userId).order("name");
       if (isMounted) setCategories((data ?? []) as Category[]);
     }
 
@@ -182,6 +182,7 @@ export function TransactionsPage({ onLogout, userId, activeItem, onNavigate }: T
       const { data } = await supabase
         .from("transactions")
         .select("id, amount, type, date, note, category_id, categories(name)")
+        .eq("user_id", userId)
         .order("date", { ascending: false });
       const mapped = (data ?? []).map((row) => {
         const amountValue = Number(row.amount ?? 0);

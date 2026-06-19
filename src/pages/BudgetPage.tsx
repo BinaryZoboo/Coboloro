@@ -309,12 +309,12 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate }: BudgetP
       }
 
       const [{ data: cats }, { data: buds }, { data: txs }, { data: recs }, { data: goals }, { data: placements }, { data: savBudgets }] = await Promise.all([
-        supabase.from("categories").select("id, name, type").order("name"),
+        supabase.from("categories").select("id, name, type").eq("user_id", userId).order("name"),
         supabase.from("budgets").select("id, category_id, month, planned_amount").eq("user_id", userId).eq("month", activeMonthKey),
-        supabase.from("transactions").select("amount, type, date, category_id").lte("date", new Date().toISOString().split("T")[0]).order("date", { ascending: false }),
+        supabase.from("transactions").select("amount, type, date, category_id").eq("user_id", userId).lte("date", new Date().toISOString().split("T")[0]).order("date", { ascending: false }),
         supabase.from("recurring_budgets").select("id, category_id, amount").eq("user_id", userId),
-        supabase.from("savings_goals").select("id, name, emoji").order("created_at", { ascending: false }),
-        supabase.from("savings_placements").select("id, name, emoji, type").order("created_at", { ascending: false }),
+        supabase.from("savings_goals").select("id, name, emoji").eq("user_id", userId).order("created_at", { ascending: false }),
+        supabase.from("savings_placements").select("id, name, emoji, type").eq("user_id", userId).order("created_at", { ascending: false }),
         supabase.from("savings_budget_items").select("*").eq("user_id", userId).eq("month", activeMonthKey),
       ]);
 
@@ -492,7 +492,7 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate }: BudgetP
       const afterKey = `${ay}-${String(an).padStart(2, "0")}-01`;
       await supabase.from("transactions").delete().eq("user_id", userId).eq("category_id", catId).gte("date", nextKey).lt("date", afterKey);
       await supabase.from("budgets").delete().eq("user_id", userId).eq("category_id", catId).eq("month", nextKey);
-      const { data: updTx } = await supabase.from("transactions").select("amount, type, date, category_id").order("date", { ascending: false });
+      const { data: updTx } = await supabase.from("transactions").select("amount, type, date, category_id").eq("user_id", userId).order("date", { ascending: false });
       if (updTx) setTransactions(updTx.map((r) => ({ category_id: r.category_id as string, amount: Number(r.amount ?? 0), type: r.type as "income" | "expense", date: r.date as string })));
       setRecurringBudgets((p) => p.filter((r) => r.id !== existing.id));
     } else {
@@ -511,7 +511,7 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate }: BudgetP
         const { data: et } = await supabase.from("transactions").select("id").eq("user_id", userId).eq("category_id", catId).gte("date", nextKey).lt("date", afterKey).maybeSingle();
         if (!et) {
           await supabase.from("transactions").insert({ user_id: userId, category_id: catId, amount: bud.planned_amount, type: "expense", date: nextKey, note: "Dépense récurrente" });
-          const { data: updTx } = await supabase.from("transactions").select("amount, type, date, category_id").order("date", { ascending: false });
+          const { data: updTx } = await supabase.from("transactions").select("amount, type, date, category_id").eq("user_id", userId).order("date", { ascending: false });
           if (updTx) setTransactions(updTx.map((r) => ({ category_id: r.category_id as string, amount: Number(r.amount ?? 0), type: r.type as "income" | "expense", date: r.date as string })));
         }
       }

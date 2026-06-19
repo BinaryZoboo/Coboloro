@@ -34,10 +34,11 @@ export function NotificationBell({ userId }: NotificationBellProps) {
         supabase
           .from("transactions")
           .select("id, amount, category_id")
+          .eq("user_id", userId)
           .gte("date", monthKey)
           .lt("date", nextKey)
           .eq("type", "expense"),
-        supabase.from("categories").select("id, name").eq("type", "expense"),
+        supabase.from("categories").select("id, name").eq("user_id", userId).eq("type", "expense"),
         supabase
           .from("budgets")
           .select("category_id, planned_amount")
@@ -47,6 +48,7 @@ export function NotificationBell({ userId }: NotificationBellProps) {
         supabase
           .from("transactions")
           .select("id")
+          .eq("user_id", userId)
           .eq("type", "expense")
           .or("note.is.null,note.eq."),
       ]);
