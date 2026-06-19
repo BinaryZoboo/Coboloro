@@ -304,9 +304,9 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate, userProfi
 
     async function loadAll() {
       const [{ data: cats }, { data: buds }, { data: txs }, { data: recs }, { data: goals }, { data: placements }, { data: savBudgets }] = await Promise.all([
-        supabase.from("categories").select("id, name, type").order("name"),
+        supabase.from("categories").select("id, name, type").eq("user_id", userId).order("name"),
         supabase.from("budgets").select("id, category_id, month, planned_amount").eq("user_id", userId).eq("month", activeMonthKey),
-        supabase.from("transactions").select("amount, type, date, category_id").lte("date", new Date().toISOString().split("T")[0]).order("date", { ascending: false }),
+        supabase.from("transactions").select("amount, type, date, category_id").eq("user_id", userId).lte("date", new Date().toISOString().split("T")[0]).order("date", { ascending: false }),
         supabase.from("recurring_budgets").select("id, category_id, amount").eq("user_id", userId),
         supabase.from("savings_goals").select("id, name, emoji").eq("user_id", userId).order("created_at", { ascending: false }),
         supabase.from("savings_placements").select("id, name, emoji, type").eq("user_id", userId).order("created_at", { ascending: false }),
@@ -434,7 +434,7 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate, userProfi
     setSavingId(catId);
     const existing = budgetsByCategory[catId];
     if (existing) {
-      const { data, error: err } = await supabase.from("budgets").update({ planned_amount: amount }).eq("id", existing.id).select("id, category_id, month, planned_amount").single();
+      const { data, error: err } = await supabase.from("budgets").update({ planned_amount: amount }).eq("id", existing.id).eq("user_id", userId).select("id, category_id, month, planned_amount").single();
       if (err) { setError("Impossible de mettre à jour ce budget."); } else { setBudgets((p) => p.map((b) => b.id === existing.id ? (data as BudgetRow) : b)); }
     } else {
       const { data, error: err } = await supabase.from("budgets").insert({ user_id: userId, category_id: catId, month: activeMonthKey, planned_amount: amount }).select("id, category_id, month, planned_amount").single();

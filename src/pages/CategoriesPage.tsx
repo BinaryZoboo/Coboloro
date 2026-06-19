@@ -1,6 +1,5 @@
 import { motion } from "framer-motion";
 import {
-  CalendarIcon,
   PlusIcon,
   SaveIcon,
   Trash2Icon,
@@ -8,6 +7,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { NotificationBell } from "../components/NotificationBell";
+import { ProfileSheet, getInitials } from "../components/ProfileSheet";
 import { Sidebar } from "../components/Sidebar";
 import { supabase } from "../lib/supabaseClient";
 import type { Category } from "../transaction";
@@ -38,6 +38,7 @@ export function CategoriesPage({
   const [editingType, setEditingType] = useState<Category["type"]>("expense");
   const [isSaving, setIsSaving] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Category | null>(null);
+  const [showProfile, setShowProfile] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -47,6 +48,7 @@ export function CategoriesPage({
       const { data, error } = await supabase
         .from("categories")
         .select("id, name, type")
+        .eq("user_id", userId)
         .order("name");
       if (error) {
         console.error("Failed to load categories", error);
@@ -84,9 +86,10 @@ export function CategoriesPage({
     );
     if (duplicate) { setFormError("Cette categorie existe deja"); return; }
     setIsSaving(true);
+    const trimmedName = trimmed.slice(0, 100);
     const { data, error } = await supabase
       .from("categories")
-      .insert({ user_id: userId, name: trimmed, type: formType })
+      .insert({ user_id: userId, name: trimmedName, type: formType })
       .select("id, name, type")
       .single();
     setIsSaving(false);
@@ -122,8 +125,9 @@ export function CategoriesPage({
     setIsSaving(true);
     const { data, error } = await supabase
       .from("categories")
-      .update({ name: trimmed, type: editingType })
+      .update({ name: trimmed.slice(0, 100), type: editingType })
       .eq("id", editingId)
+      .eq("user_id", userId)
       .select("id, name, type")
       .single();
     setIsSaving(false);
@@ -136,10 +140,9 @@ export function CategoriesPage({
 
   async function handleDeleteCategory(categoryId: string) {
     setActionError(""); setIsSaving(true);
-    // Clean up budget limits for this category (transactions keep their data via FK SET NULL)
     await supabase.from("budgets").delete().eq("category_id", categoryId).eq("user_id", userId);
     await supabase.from("recurring_budgets").delete().eq("category_id", categoryId).eq("user_id", userId);
-    const { error } = await supabase.from("categories").delete().eq("id", categoryId);
+    const { error } = await supabase.from("categories").delete().eq("id", categoryId).eq("user_id", userId);
     setIsSaving(false);
     if (error) { console.error("Failed to delete category", error); setActionError("Impossible de supprimer cette categorie."); return; }
     setCategories((prev) => prev.filter((c) => c.id !== categoryId));
@@ -163,19 +166,25 @@ export function CategoriesPage({
 
       <main className="lg:ml-[var(--sidebar-width)] transition-all duration-200">
         <header className="sticky top-0 z-20 glass border-b border-surface-border">
-          <div className="flex flex-col gap-3 px-6 py-4 lg:px-8 sm:flex-row sm:items-center sm:justify-between">
-            <div className="ml-12 lg:ml-0">
-              <motion.h1
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-                className="text-lg font-semibold text-fg"
+          <div className="flex items-center justify-between px-4 py-3.5 lg:px-8 lg:py-4">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowProfile(true)}
+                className="lg:hidden w-9 h-9 rounded-lg bg-accent/10 border border-accent/25 flex items-center justify-center text-xs font-bold text-accent hover:bg-accent/15 transition-colors flex-shrink-0"
+                aria-label="Mon profil"
               >
-                Categories
-              </motion.h1>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <CalendarIcon className="w-3.5 h-3.5 text-fg-subtle" />
-                <p className="text-xs text-fg-subtle capitalize">{today}</p>
+                {getInitials(userProfile ?? null)}
+              </button>
+              <div>
+                <motion.h1
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25 }}
+                  className="text-base font-semibold text-fg"
+                >
+                  Catégories
+                </motion.h1>
+                <p className="text-[10px] text-fg-subtle capitalize hidden lg:block">{today}</p>
               </div>
             </div>
             <NotificationBell userId={userId} />
@@ -363,6 +372,8 @@ export function CategoriesPage({
           </div>
         </div>
       </main>
+
+      <ProfileSheet isOpen={showProfile} onClose={() => setShowProfile(false)} userProfile={userProfile ?? null} onNavigate={p => { setShowProfile(false); onNavigate?.(p); }} onLogout={onLogout} />
 
       {pendingDelete ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

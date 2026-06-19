@@ -159,7 +159,7 @@ export function TransactionsPage({ onLogout, userId, activeItem, onNavigate, use
     let isMounted = true;
 
     async function loadCategories() {
-      const { data } = await supabase.from("categories").select("id, name, type").order("name");
+      const { data } = await supabase.from("categories").select("id, name, type").eq("user_id", userId).order("name");
       if (isMounted) setCategories((data ?? []) as Category[]);
     }
 
@@ -167,6 +167,7 @@ export function TransactionsPage({ onLogout, userId, activeItem, onNavigate, use
       const { data } = await supabase
         .from("transactions")
         .select("id, amount, type, date, note, category_id, categories(name)")
+        .eq("user_id", userId)
         .order("date", { ascending: false });
       const mapped = (data ?? []).map((row) => {
         const amountValue = Number(row.amount ?? 0);
@@ -271,7 +272,7 @@ export function TransactionsPage({ onLogout, userId, activeItem, onNavigate, use
   async function handleConfirmDelete() {
     if (!pendingDelete) return;
     setDeleteError("");
-    const { error } = await supabase.from("transactions").delete().eq("id", pendingDelete.id);
+    const { error } = await supabase.from("transactions").delete().eq("id", pendingDelete.id).eq("user_id", userId);
     if (error) { setDeleteError("Impossible de supprimer cette transaction."); return; }
     setTransactions((prev) => prev.filter((tx) => tx.id !== pendingDelete.id));
     setPendingDelete(null);
@@ -291,8 +292,9 @@ export function TransactionsPage({ onLogout, userId, activeItem, onNavigate, use
       if (isNaN(amountValue) || amountValue <= 0 || amountValue > 1_000_000) { setEditError("Montant invalide (max. 1 000 000 €)"); return; }
       const { error } = await supabase
         .from("transactions")
-        .update({ amount: amountValue, note: editMerchant, category_id: cat.id, date: editDate, type: editType })
-        .eq("id", editingId!);
+        .update({ amount: amountValue, note: editMerchant.slice(0, 255), category_id: cat.id, date: editDate, type: editType })
+        .eq("id", editingId!)
+        .eq("user_id", userId);
       if (error) throw error;
       setTransactions((prev) =>
         prev.map((tx) =>

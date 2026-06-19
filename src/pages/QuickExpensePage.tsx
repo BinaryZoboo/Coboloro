@@ -81,7 +81,7 @@ export function QuickExpensePage({ onHome, userId }: QuickExpensePageProps) {
 
   const parsedAmount = useMemo(() => {
     const v = Number(normalizeAmount(amountInput));
-    return Number.isFinite(v) && v > 0 ? v : null;
+    return Number.isFinite(v) && v > 0 && v <= 999_999_99 ? v : null;
   }, [amountInput]);
 
   const formattedDisplay = useMemo(() => {

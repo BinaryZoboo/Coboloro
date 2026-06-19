@@ -101,6 +101,7 @@ export function App() {
         setAuthMode("default");
         setActivePage("dashboard");
         setUserProfile(null);
+        try { sessionStorage.clear(); } catch {}
       }
     });
 

@@ -252,10 +252,10 @@ export function DashboardPage({ onLogout, userId, activeItem, onNavigate, userPr
     let mounted = true;
 
     async function loadCategories() {
-      const { data } = await supabase.from("categories").select("id, name, type").order("name");
+      const { data } = await supabase.from("categories").select("id, name, type").eq("user_id", userId).order("name");
       if (data && data.length > 0) { if (mounted) setCategories(data as Category[]); return; }
       await supabase.from("categories").insert(defaultCategories.map((c) => ({ ...c, user_id: userId })));
-      const { data: seeded } = await supabase.from("categories").select("id, name, type").order("name");
+      const { data: seeded } = await supabase.from("categories").select("id, name, type").eq("user_id", userId).order("name");
       if (mounted) setCategories((seeded ?? []) as Category[]);
     }
 
@@ -264,6 +264,7 @@ export function DashboardPage({ onLogout, userId, activeItem, onNavigate, userPr
       const { data } = await supabase
         .from("transactions")
         .select("id, amount, type, date, note, category_id, categories(name)")
+        .eq("user_id", userId)
         .lte("date", today)
         .order("date", { ascending: false });
       if (!mounted || !data) return;
@@ -391,6 +392,13 @@ export function DashboardPage({ onLogout, userId, activeItem, onNavigate, userPr
               >
                 {getInitials(userProfile ?? null)}
               </button>
+              {/* Mobile: greeting */}
+              <div className="lg:hidden">
+                <p className="text-sm font-semibold text-fg leading-tight">
+                  Bonjour{userProfile?.firstName ? `, ${userProfile.firstName}` : ""} 👋
+                </p>
+                <p className="text-[10px] text-fg-subtle capitalize">{todayLabel}</p>
+              </div>
               {/* Desktop: salutation */}
               <div className="hidden lg:block">
                 <motion.h1 initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="text-base font-semibold text-fg">
@@ -403,11 +411,11 @@ export function DashboardPage({ onLogout, userId, activeItem, onNavigate, userPr
               </div>
             </div>
 
-            <div className="flex items-center gap-1 sm:gap-2">
+            <div className="flex items-center gap-1">
               <button onClick={() => setSelectedMonthKey((k) => addMonths(k, -1))} className="w-8 h-8 flex items-center justify-center rounded-lg text-fg-muted hover:text-fg hover:bg-surface-hover transition-colors" aria-label="Mois précédent">
                 <ArrowLeftIcon className="w-4 h-4" />
               </button>
-              <span className="text-xs font-medium text-fg min-w-[80px] text-center hidden sm:inline">{formatMonthLabel(selectedMonthKey)}</span>
+              <span className="text-xs font-medium text-fg min-w-[72px] text-center">{formatMonthLabel(selectedMonthKey)}</span>
               <button onClick={() => setSelectedMonthKey((k) => addMonths(k, 1))} className="w-8 h-8 flex items-center justify-center rounded-lg text-fg-muted hover:text-fg hover:bg-surface-hover transition-colors" aria-label="Mois suivant">
                 <ArrowRightIcon className="w-4 h-4" />
               </button>
