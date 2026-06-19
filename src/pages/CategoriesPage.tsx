@@ -69,6 +69,7 @@ export function CategoriesPage({
       const { data, error } = await supabase
         .from("categories")
         .select("id, name, type")
+        .eq("user_id", userId)
         .order("name");
       if (error) {
         console.error("Failed to load categories", error);
@@ -107,9 +108,10 @@ export function CategoriesPage({
     );
     if (duplicate) { setFormError("Cette categorie existe deja"); return; }
     setIsSaving(true);
+    const trimmedName = trimmed.slice(0, 100);
     const { data, error } = await supabase
       .from("categories")
-      .insert({ user_id: userId, name: trimmed, type: formType })
+      .insert({ user_id: userId, name: trimmedName, type: formType })
       .select("id, name, type")
       .single();
     setIsSaving(false);
@@ -145,8 +147,9 @@ export function CategoriesPage({
     setIsSaving(true);
     const { data, error } = await supabase
       .from("categories")
-      .update({ name: trimmed, type: editingType })
+      .update({ name: trimmed.slice(0, 100), type: editingType })
       .eq("id", editingId)
+      .eq("user_id", userId)
       .select("id, name, type")
       .single();
     setIsSaving(false);
@@ -159,14 +162,13 @@ export function CategoriesPage({
 
   async function handleDeleteCategory(categoryId: string) {
     setActionError(""); setIsSaving(true);
-    const { error: txError } = await supabase.from("transactions").delete().eq("category_id", categoryId);
+    const { error: txError } = await supabase.from("transactions").delete().eq("user_id", userId).eq("category_id", categoryId);
     if (txError) {
       setIsSaving(false);
-      console.error("Failed to delete transactions for category", txError);
       setActionError("Impossible de supprimer les transactions liees a cette categorie.");
       return;
     }
-    const { error } = await supabase.from("categories").delete().eq("id", categoryId);
+    const { error } = await supabase.from("categories").delete().eq("id", categoryId).eq("user_id", userId);
     setIsSaving(false);
     if (error) { console.error("Failed to delete category", error); setActionError("Impossible de supprimer cette categorie."); return; }
     setCategories((prev) => prev.filter((c) => c.id !== categoryId));

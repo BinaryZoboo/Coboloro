@@ -287,13 +287,13 @@ export function TransactionsPage({ onLogout, userId, activeItem, onNavigate }: T
 
   async function handleConfirmDelete() {
     if (!pendingDelete) return;
-    await supabase.from("transactions").delete().eq("id", pendingDelete.id);
+    await supabase.from("transactions").delete().eq("id", pendingDelete.id).eq("user_id", userId);
     setTransactions((prev) => prev.filter((tx) => tx.id !== pendingDelete.id));
     setPendingDelete(null);
   }
 
   async function handleSwipeDelete(id: string) {
-    await supabase.from("transactions").delete().eq("id", id);
+    await supabase.from("transactions").delete().eq("id", id).eq("user_id", userId);
     setTransactions((prev) => prev.filter((tx) => tx.id !== id));
   }
 
@@ -307,8 +307,9 @@ export function TransactionsPage({ onLogout, userId, activeItem, onNavigate }: T
       if (isNaN(amountValue) || amountValue <= 0) { setEditError("Montant invalide"); return; }
       const { error } = await supabase
         .from("transactions")
-        .update({ amount: amountValue, note: editMerchant, category_id: cat.id, date: editDate, type: editType })
-        .eq("id", editingId!);
+        .update({ amount: amountValue, note: editMerchant.slice(0, 255), category_id: cat.id, date: editDate, type: editType })
+        .eq("id", editingId!)
+        .eq("user_id", userId);
       if (error) throw error;
       setTransactions((prev) =>
         prev.map((tx) =>
