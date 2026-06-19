@@ -92,7 +92,7 @@ export function Logo({
       <span
         style={{
           fontFamily: "'Courier New', Courier, monospace",
-          fontSize: size * 0.44,
+          fontSize: size * 0.55,
           fontWeight: 700,
           color: textCol,
           letterSpacing: "-0.5px",

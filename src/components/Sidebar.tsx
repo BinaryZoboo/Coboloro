@@ -89,7 +89,7 @@ export function Sidebar({ onLogout, activeItem = "dashboard", onNavigate, userPr
               exit={{ opacity: 0, x: -8 }}
               transition={{ duration: 0.15 }}
             >
-              <Logo size={32} theme="dark" />
+              <Logo size={40} theme="dark" />
             </motion.div>
           )}
         </AnimatePresence>
