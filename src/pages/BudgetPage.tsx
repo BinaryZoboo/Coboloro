@@ -442,7 +442,7 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate }: BudgetP
     setSavingId(catId);
     const existing = budgetsByCategory[catId];
     if (existing) {
-      const { data, error: err } = await supabase.from("budgets").update({ planned_amount: amount }).eq("id", existing.id).select("id, category_id, month, planned_amount").single();
+      const { data, error: err } = await supabase.from("budgets").update({ planned_amount: amount }).eq("id", existing.id).eq("user_id", userId).select("id, category_id, month, planned_amount").single();
       if (err) { setError("Impossible de mettre à jour ce budget."); } else { setBudgets((p) => p.map((b) => b.id === existing.id ? (data as BudgetRow) : b)); }
     } else {
       const { data, error: err } = await supabase.from("budgets").insert({ user_id: userId, category_id: catId, month: activeMonthKey, planned_amount: amount }).select("id, category_id, month, planned_amount").single();

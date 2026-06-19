@@ -387,8 +387,8 @@ export function SavingsPage({ onLogout, userId, activeItem, onNavigate }: Saving
       const [{ data: { user } }, { data: profile }, { data: goalData }, { data: placementData }] = await Promise.all([
         supabase.auth.getUser(),
         supabase.from("profiles").select("first_name, last_name").eq("id", userId).single(),
-        supabase.from("savings_goals").select("*").order("created_at", { ascending: false }),
-        supabase.from("savings_placements").select("*").order("created_at", { ascending: false }),
+        supabase.from("savings_goals").select("*").eq("user_id", userId).order("created_at", { ascending: false }),
+        supabase.from("savings_placements").select("*").eq("user_id", userId).order("created_at", { ascending: false }),
       ]);
       if (!mounted) return;
       if (profile) setUserProfile({ firstName: profile.first_name ?? "", lastName: profile.last_name ?? "", email: user?.email ?? "" });
@@ -432,7 +432,7 @@ export function SavingsPage({ onLogout, userId, activeItem, onNavigate }: Saving
     const payload = { name, target_amount: target, current_amount: current, target_date: goalForm.target_date || null, emoji: goalForm.emoji, color: goalForm.color };
     try {
       if (editingGoal) {
-        const { data, error } = await supabase.from("savings_goals").update(payload).eq("id", editingGoal.id).select("*").single();
+        const { data, error } = await supabase.from("savings_goals").update(payload).eq("id", editingGoal.id).eq("user_id", userId).select("*").single();
         if (error) throw error;
         setGoals(prev => prev.map(g => g.id === editingGoal.id ? data as SavingsGoal : g));
       } else {
@@ -447,7 +447,7 @@ export function SavingsPage({ onLogout, userId, activeItem, onNavigate }: Saving
 
   async function handleGoalDelete() {
     if (!deleteGoal) return;
-    await supabase.from("savings_goals").delete().eq("id", deleteGoal.id);
+    await supabase.from("savings_goals").delete().eq("id", deleteGoal.id).eq("user_id", userId);
     setGoals(prev => prev.filter(g => g.id !== deleteGoal.id));
     setDeleteGoal(null);
   }
@@ -458,7 +458,7 @@ export function SavingsPage({ onLogout, userId, activeItem, onNavigate }: Saving
     if (isNaN(amt) || amt <= 0) { setDepositError("Montant invalide."); return; }
     const next = depositType === "add" ? depositGoal.current_amount + amt : Math.max(0, depositGoal.current_amount - amt);
     setIsSaving(true);
-    const { data, error } = await supabase.from("savings_goals").update({ current_amount: next }).eq("id", depositGoal.id).select("*").single();
+    const { data, error } = await supabase.from("savings_goals").update({ current_amount: next }).eq("id", depositGoal.id).eq("user_id", userId).select("*").single();
     setIsSaving(false);
     if (error) { setDepositError(error.message); return; }
     setGoals(prev => prev.map(g => g.id === depositGoal.id ? data as SavingsGoal : g));
@@ -484,7 +484,7 @@ export function SavingsPage({ onLogout, userId, activeItem, onNavigate }: Saving
     const payload = { name, institution: placementForm.institution.trim() || null, type: placementForm.type, current_value: currentValue, initial_deposit: initialDeposit, annual_rate: annualRate, emoji: placementForm.emoji, color: placementForm.color };
     try {
       if (editingPlacement) {
-        const { data, error } = await supabase.from("savings_placements").update(payload).eq("id", editingPlacement.id).select("*").single();
+        const { data, error } = await supabase.from("savings_placements").update(payload).eq("id", editingPlacement.id).eq("user_id", userId).select("*").single();
         if (error) throw error;
         setPlacements(prev => prev.map(p => p.id === editingPlacement.id ? data as SavingsPlacement : p));
       } else {
@@ -499,7 +499,7 @@ export function SavingsPage({ onLogout, userId, activeItem, onNavigate }: Saving
 
   async function handlePlacementDelete() {
     if (!deletePlacement) return;
-    await supabase.from("savings_placements").delete().eq("id", deletePlacement.id);
+    await supabase.from("savings_placements").delete().eq("id", deletePlacement.id).eq("user_id", userId);
     setPlacements(prev => prev.filter(p => p.id !== deletePlacement.id));
     setDeletePlacement(null);
   }
@@ -509,7 +509,7 @@ export function SavingsPage({ onLogout, userId, activeItem, onNavigate }: Saving
     const val = parseFloat(updateValue);
     if (isNaN(val) || val < 0) { setUpdateError("Valeur invalide."); return; }
     setIsSaving(true);
-    const { data, error } = await supabase.from("savings_placements").update({ current_value: val }).eq("id", updatePlacement.id).select("*").single();
+    const { data, error } = await supabase.from("savings_placements").update({ current_value: val }).eq("id", updatePlacement.id).eq("user_id", userId).select("*").single();
     setIsSaving(false);
     if (error) { setUpdateError(error.message); return; }
     setPlacements(prev => prev.map(p => p.id === updatePlacement.id ? data as SavingsPlacement : p));
