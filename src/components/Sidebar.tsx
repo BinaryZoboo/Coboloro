@@ -11,6 +11,7 @@ import {
   TrendingDownIcon,
   WalletIcon,
 } from "lucide-react";
+import { Logo, LogoIcon } from "./Logo";
 import { useEffect, useState } from "react";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -49,13 +50,16 @@ export function Sidebar({ onLogout, activeItem = "dashboard", onNavigate, userPr
     try { localStorage.setItem("theme", theme); } catch {}
   }, [theme]);
 
+  const emailFallback = userProfile?.email?.split("@")[0] ?? "Utilisateur";
+
   const initials = (() => {
     if (!userProfile) return "U";
-    return ((userProfile.firstName?.[0] ?? "") + (userProfile.lastName?.[0] ?? "")).toUpperCase() || "U";
+    const fromName = ((userProfile.firstName?.[0] ?? "") + (userProfile.lastName?.[0] ?? "")).toUpperCase();
+    return fromName || emailFallback[0]?.toUpperCase() || "U";
   })();
 
   const fullName = userProfile
-    ? `${userProfile.firstName} ${userProfile.lastName}`.trim() || "Utilisateur"
+    ? `${userProfile.firstName} ${userProfile.lastName}`.trim() || emailFallback
     : "Utilisateur";
 
   return (
@@ -66,30 +70,26 @@ export function Sidebar({ onLogout, activeItem = "dashboard", onNavigate, userPr
     >
       {/* ── Logo ── */}
       <div className="flex items-center h-16 px-4 border-b border-surface-border flex-shrink-0">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-accent to-accent-dark flex items-center justify-center flex-shrink-0">
-          <WalletIcon className="w-4 h-4 text-accent-fg" />
-        </div>
-        <AnimatePresence>
-          {!collapsed && (
+        <AnimatePresence mode="wait">
+          {collapsed ? (
             <motion.div
+              key="icon-only"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+            >
+              <LogoIcon size={32} theme="dark" />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="full-logo"
               initial={{ opacity: 0, x: -8 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -8 }}
               transition={{ duration: 0.15 }}
-              className="ml-3 min-w-0"
             >
-              <p
-                className="text-sm font-bold tracking-tight"
-                style={{
-                  background: "linear-gradient(90deg, rgb(var(--accent-dark)) 0%, rgb(var(--accent-light)) 50%, rgb(var(--accent-dark)) 100%)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  backgroundClip: "text",
-                }}
-              >
-                COBOLORO
-              </p>
-              <p className="text-[10px] text-fg-subtle tracking-wide">Finances</p>
+              <Logo size={32} theme="dark" />
             </motion.div>
           )}
         </AnimatePresence>
