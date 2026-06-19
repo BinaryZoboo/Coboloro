@@ -58,6 +58,7 @@ export function QuickExpensePage({ onHome, userId }: QuickExpensePageProps) {
   const [showNote, setShowNote] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const noteRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -65,6 +66,7 @@ export function QuickExpensePage({ onHome, userId }: QuickExpensePageProps) {
     supabase
       .from("categories")
       .select("id, name, type")
+      .eq("user_id", userId)
       .eq("type", "expense")
       .order("name")
       .then(({ data }) => {
@@ -110,6 +112,7 @@ export function QuickExpensePage({ onHome, userId }: QuickExpensePageProps) {
 
   async function handleValidate() {
     if (!parsedAmount) return;
+    setSaveError("");
     setIsSaving(true);
     try {
       let categoryId = selectedCategoryId;
@@ -155,6 +158,7 @@ export function QuickExpensePage({ onHome, userId }: QuickExpensePageProps) {
       }, 800);
     } catch (e) {
       console.error("Failed to save expense", e);
+      setSaveError("Impossible d'enregistrer la dépense. Réessaie.");
     } finally {
       setIsSaving(false);
     }
@@ -300,6 +304,9 @@ export function QuickExpensePage({ onHome, userId }: QuickExpensePageProps) {
         </div>
 
         <div className="flex-shrink-0 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          {saveError && (
+            <p className="text-xs text-red-400 text-center mb-2">{saveError}</p>
+          )}
           <button
             type="button"
             onClick={handleValidate}

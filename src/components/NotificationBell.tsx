@@ -25,6 +25,7 @@ export function NotificationBell({ userId }: NotificationBellProps) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    let mounted = true;
     async function load() {
       const now = new Date();
       const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
@@ -34,10 +35,11 @@ export function NotificationBell({ userId }: NotificationBellProps) {
         supabase
           .from("transactions")
           .select("id, amount, category_id")
+          .eq("user_id", userId)
           .gte("date", monthKey)
           .lt("date", nextKey)
           .eq("type", "expense"),
-        supabase.from("categories").select("id, name").eq("type", "expense"),
+        supabase.from("categories").select("id, name").eq("user_id", userId).eq("type", "expense"),
         supabase
           .from("budgets")
           .select("category_id, planned_amount")
@@ -47,6 +49,7 @@ export function NotificationBell({ userId }: NotificationBellProps) {
         supabase
           .from("transactions")
           .select("id")
+          .eq("user_id", userId)
           .eq("type", "expense")
           .or("note.is.null,note.eq."),
       ]);
@@ -121,10 +124,11 @@ export function NotificationBell({ userId }: NotificationBellProps) {
         return a.severity === "error" ? -1 : 1;
       });
 
-      setItems(notifs);
+      if (mounted) setItems(notifs);
     }
 
     void load();
+    return () => { mounted = false; };
   }, [userId]);
 
   useEffect(() => {

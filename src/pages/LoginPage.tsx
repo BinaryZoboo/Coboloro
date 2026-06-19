@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { EyeIcon, EyeOffIcon, LoaderIcon, PlayIcon, TrophyIcon, WalletIcon, XIcon } from "lucide-react";
+import { EyeIcon, EyeOffIcon, LoaderIcon, PlayIcon, TrophyIcon, XIcon } from "lucide-react";
+import { LogoIcon } from "../components/Logo";
 import { useEffect, useRef, useState, type SyntheticEvent } from "react";
 import { SnakeBackground } from "../components/SnakeBackground";
 import { supabase } from "../lib/supabaseClient";
@@ -108,7 +109,7 @@ export function LoginPage({ mode = "default", onRecoveryComplete }: LoginPagePro
     }
     if (view === "login" || view === "signup" || view === "updatePassword") {
       if (!password) newErrors.password = "Mot de passe requis";
-      else if (password.length < 6) newErrors.password = "Minimum 6 caractères";
+      else if (password.length < 8) newErrors.password = "Minimum 8 caractères";
     }
     if (view === "updatePassword") {
       if (!confirmPassword) newErrors.confirmPassword = "Confirmation requise";
@@ -133,18 +134,12 @@ export function LoginPage({ mode = "default", onRecoveryComplete }: LoginPagePro
         if (error) throw error;
       }
       if (view === "signup") {
-        const { data, error } = await supabase.auth.signUp({ email, password });
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { data: { first_name: firstName, last_name: lastName } },
+        });
         if (error) throw error;
-        if (data.user) {
-          const { error: profileError } = await supabase.from("profiles").insert({
-            id: data.user.id,
-            user_id: data.user.id,
-            first_name: firstName,
-            last_name: lastName,
-            created_at: new Date().toISOString(),
-          });
-          if (profileError) console.error("Failed to create profile", profileError);
-        }
         if (!data.session) setStatusMessage("Compte créé. Vérifie ta boîte e-mail.");
       }
       if (view === "reset") {
@@ -310,13 +305,12 @@ export function LoginPage({ mode = "default", onRecoveryComplete }: LoginPagePro
                       scale: [1, 1.12, 0.96, 1.05, 1],
                     } : {}}
                     transition={{ duration: 0.55, ease: "easeOut" }}
-                    className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 select-none ${!easterEggRevealed ? "cursor-default" : ""}`}
+                    className={`mb-4 select-none ${!easterEggRevealed ? "cursor-default" : ""}`}
                     style={{
-                      background: "linear-gradient(135deg, rgb(var(--accent)) 0%, rgb(var(--accent-dark)) 100%)",
-                      boxShadow: easterEggRevealed ? "var(--shadow-accent-lg)" : "var(--shadow-accent-md)",
+                      filter: easterEggRevealed ? "drop-shadow(0 0 12px rgba(245,193,136,0.5))" : undefined,
                     }}
                   >
-                    <WalletIcon className="w-7 h-7 text-accent-fg" />
+                    <LogoIcon size={56} theme="dark" />
                   </motion.div>
 
                   <AnimatePresence>

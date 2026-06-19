@@ -79,7 +79,11 @@ export function App() {
     let mounted = true;
 
     supabase.auth.getSession().then(({ data }) => {
-      if (mounted) setSession(data.session ?? null);
+      if (!mounted) return;
+      setSession(data.session ?? null);
+      if (data.session?.user?.email) {
+        void loadProfile(data.session.user.id, data.session.user.email);
+      }
     });
 
     const { data } = supabase.auth.onAuthStateChange((event, newSession) => {
@@ -115,6 +119,7 @@ export function App() {
     userId: session?.user.id ?? "",
     activeItem: activePage,
     onNavigate: navigate,
+    userProfile,
   };
 
   function renderPage() {
@@ -199,8 +204,6 @@ export function App() {
         <BottomNav
           activePage={activePage}
           onNavigate={navigate}
-          onLogout={() => supabase.auth.signOut()}
-          userProfile={userProfile}
         />
       )}
 

@@ -14,6 +14,7 @@ import {
   Trash2Icon,
   XIcon,
 } from "lucide-react";
+import { ProfileSheet, getInitials } from "../components/ProfileSheet";
 import { useEffect, useMemo, useState } from "react";
 import { AddTransactionModal } from "../components/AddTransactionModal";
 import { DailySpendingChart } from "../components/DailySpendingChart";
@@ -31,6 +32,7 @@ interface TransactionsPageProps {
   userId: string;
   activeItem?: string;
   onNavigate?: (itemId: string) => void;
+  userProfile?: { firstName: string; lastName: string; email: string } | null;
 }
 
 function getCategoryName(categories: unknown) {
@@ -63,25 +65,22 @@ function getDateLabel(dateStr: string): string {
 
 interface SwipeableRowProps {
   tx: Transaction;
-  onDelete: (id: string) => void;
+  onDelete: (tx: Transaction) => void;
   onEditRequest: (tx: Transaction) => void;
 }
 
 function SwipeableRow({ tx, onDelete, onEditRequest }: SwipeableRowProps) {
   const x = useMotionValue(0);
   const deleteOpacity = useTransform(x, [-100, -24], [1, 0]);
-  const [dismissed, setDismissed] = useState(false);
 
   function handleDragEnd(_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) {
     if (info.offset.x < -88) {
-      setDismissed(true);
-      onDelete(tx.id);
+      void animate(x, 0, { type: "spring", stiffness: 400, damping: 32 });
+      onDelete(tx);
     } else {
       void animate(x, 0, { type: "spring", stiffness: 400, damping: 32 });
     }
   }
-
-  if (dismissed) return null;
 
   const emoji = getCategoryEmoji(tx.category);
   const isIncome = tx.type === "income";
@@ -126,17 +125,13 @@ function SwipeableRow({ tx, onDelete, onEditRequest }: SwipeableRowProps) {
   );
 }
 
-export function TransactionsPage({ onLogout, userId, activeItem, onNavigate }: TransactionsPageProps) {
+export function TransactionsPage({ onLogout, userId, activeItem, onNavigate, userProfile }: TransactionsPageProps) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showFilterSheet, setShowFilterSheet] = useState(false);
-  const [userProfile, setUserProfile] = useState<{
-    firstName: string;
-    lastName: string;
-    email: string;
-  } | null>(null);
+  const [showProfile, setShowProfile] = useState(false);
 
   const [selectedType, setSelectedType] = useState<"all" | "income" | "expense">("all");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -157,19 +152,11 @@ export function TransactionsPage({ onLogout, userId, activeItem, onNavigate }: T
   const [editDate, setEditDate] = useState("");
   const [editType, setEditType] = useState<"income" | "expense">("expense");
   const [editError, setEditError] = useState("");
+  const [deleteError, setDeleteError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
-
-    async function loadProfile() {
-      const { data: user } = await supabase.auth.getUser();
-      if (!user.user?.email) return;
-      const { data } = await supabase.from("profiles").select("first_name, last_name").eq("id", userId).single();
-      if (data && isMounted) {
-        setUserProfile({ firstName: data.first_name || "Utilisateur", lastName: data.last_name || "", email: user.user.email });
-      }
-    }
 
     async function loadCategories() {
       const { data } = await supabase.from("categories").select("id, name, type").order("name");
@@ -196,7 +183,6 @@ export function TransactionsPage({ onLogout, userId, activeItem, onNavigate }: T
       if (isMounted) { setTransactions(mapped); setIsLoading(false); }
     }
 
-    void loadProfile();
     void loadCategories();
     void loadTransactions();
 
@@ -284,24 +270,25 @@ export function TransactionsPage({ onLogout, userId, activeItem, onNavigate }: T
 
   async function handleConfirmDelete() {
     if (!pendingDelete) return;
-    await supabase.from("transactions").delete().eq("id", pendingDelete.id);
+    setDeleteError("");
+    const { error } = await supabase.from("transactions").delete().eq("id", pendingDelete.id);
+    if (error) { setDeleteError("Impossible de supprimer cette transaction."); return; }
     setTransactions((prev) => prev.filter((tx) => tx.id !== pendingDelete.id));
     setPendingDelete(null);
   }
 
-  async function handleSwipeDelete(id: string) {
-    await supabase.from("transactions").delete().eq("id", id);
-    setTransactions((prev) => prev.filter((tx) => tx.id !== id));
+  function handleSwipeDelete(tx: Transaction) {
+    setPendingDelete(tx);
   }
 
   async function handleSaveEdit() {
-    if (!editAmount || !editMerchant || !editCategory || !editDate) { setEditError("Tous les champs sont requis"); return; }
+    if (!editAmount || !editCategory || !editDate) { setEditError("Tous les champs sont requis"); return; }
     setIsSaving(true);
     try {
       const cat = categories.find((c) => c.name === editCategory);
       if (!cat) { setEditError("Catégorie invalide"); return; }
       const amountValue = Math.abs(parseFloat(editAmount));
-      if (isNaN(amountValue) || amountValue <= 0) { setEditError("Montant invalide"); return; }
+      if (isNaN(amountValue) || amountValue <= 0 || amountValue > 1_000_000) { setEditError("Montant invalide (max. 1 000 000 €)"); return; }
       const { error } = await supabase
         .from("transactions")
         .update({ amount: amountValue, note: editMerchant, category_id: cat.id, date: editDate, type: editType })
@@ -354,21 +341,30 @@ export function TransactionsPage({ onLogout, userId, activeItem, onNavigate }: T
 
   return (
     <div className="min-h-screen w-full bg-surface">
-      <Sidebar onLogout={onLogout} activeItem={activeItem} onNavigate={onNavigate} userProfile={userProfile} />
+      <Sidebar onLogout={onLogout} activeItem={activeItem} onNavigate={onNavigate} userProfile={userProfile ?? null} />
 
       <main className="lg:ml-[var(--sidebar-width)] transition-all duration-200">
         <header className="sticky top-0 z-20 glass border-b border-surface-border">
           <div className="flex items-center justify-between gap-3 px-5 py-4 lg:px-8">
-            <div className="min-w-0">
-              <motion.h1
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25 }}
-                className="text-base font-semibold text-fg"
+            <div className="flex items-center gap-3 min-w-0">
+              <button
+                onClick={() => setShowProfile(true)}
+                className="lg:hidden w-9 h-9 rounded-lg bg-accent/10 border border-accent/25 flex items-center justify-center text-xs font-bold text-accent hover:bg-accent/15 transition-colors flex-shrink-0"
+                aria-label="Mon profil"
               >
-                Transactions
-              </motion.h1>
-              <p className="text-xs text-fg-subtle mt-0.5">{filteredTransactions.length} transaction{filteredTransactions.length > 1 ? "s" : ""}</p>
+                {getInitials(userProfile ?? null)}
+              </button>
+              <div className="min-w-0">
+                <motion.h1
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25 }}
+                  className="text-base font-semibold text-fg"
+                >
+                  Transactions
+                </motion.h1>
+                <p className="text-xs text-fg-subtle mt-0.5">{filteredTransactions.length} transaction{filteredTransactions.length > 1 ? "s" : ""}</p>
+              </div>
             </div>
 
             <div className="hidden lg:flex items-center gap-2 flex-1 justify-center mx-6">
@@ -704,9 +700,10 @@ export function TransactionsPage({ onLogout, userId, activeItem, onNavigate }: T
                     </p>
                   </div>
                   <p className="text-xs text-fg-subtle">Cette action est irréversible.</p>
+                  {deleteError && <p className="text-xs text-red-400 mt-2">{deleteError}</p>}
                 </div>
                 <div className="px-5 py-4 border-t border-surface-border flex gap-3">
-                  <button onClick={() => setPendingDelete(null)} className="flex-1 py-2.5 rounded-xl bg-surface-elevated border border-surface-border text-sm text-fg-secondary font-medium hover:bg-surface-hover transition-colors">Annuler</button>
+                  <button onClick={() => { setPendingDelete(null); setDeleteError(""); }} className="flex-1 py-2.5 rounded-xl bg-surface-elevated border border-surface-border text-sm text-fg-secondary font-medium hover:bg-surface-hover transition-colors">Annuler</button>
                   <button onClick={handleConfirmDelete} className="flex-1 py-2.5 rounded-xl bg-red-500/15 border border-red-500/25 text-sm text-red-400 font-semibold hover:bg-red-500/25 transition-colors">Supprimer</button>
                 </div>
               </div>
@@ -716,6 +713,7 @@ export function TransactionsPage({ onLogout, userId, activeItem, onNavigate }: T
       </AnimatePresence>
 
       <AddTransactionModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSubmit={handleAddTransaction} categories={categories} />
+      <ProfileSheet isOpen={showProfile} onClose={() => setShowProfile(false)} userProfile={userProfile ?? null} onNavigate={p => { setShowProfile(false); onNavigate?.(p); }} onLogout={onLogout} />
     </div>
   );
 }

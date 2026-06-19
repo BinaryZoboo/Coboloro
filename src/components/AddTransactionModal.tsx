@@ -33,7 +33,9 @@ export function AddTransactionModal({
 
   function validate() {
     const newErrors: Record<string, string> = {};
-    if (!amount || parseFloat(amount) <= 0) newErrors.amount = "Montant requis";
+    const parsedAmount = parseFloat(amount);
+    if (!amount || parsedAmount <= 0) newErrors.amount = "Montant requis";
+    else if (parsedAmount > 1_000_000) newErrors.amount = "Montant trop élevé (max. 1 000 000 €)";
     if (!category) newErrors.category = "Catégorie requise";
     if (!description.trim()) newErrors.description = "Description requise";
     if (!date) newErrors.date = "Date requise";
