@@ -152,6 +152,7 @@ export function TransactionsPage({ onLogout, userId, activeItem, onNavigate, use
   const [editDate, setEditDate] = useState("");
   const [editType, setEditType] = useState<"income" | "expense">("expense");
   const [editError, setEditError] = useState("");
+  const [deleteError, setDeleteError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -269,7 +270,9 @@ export function TransactionsPage({ onLogout, userId, activeItem, onNavigate, use
 
   async function handleConfirmDelete() {
     if (!pendingDelete) return;
-    await supabase.from("transactions").delete().eq("id", pendingDelete.id);
+    setDeleteError("");
+    const { error } = await supabase.from("transactions").delete().eq("id", pendingDelete.id);
+    if (error) { setDeleteError("Impossible de supprimer cette transaction."); return; }
     setTransactions((prev) => prev.filter((tx) => tx.id !== pendingDelete.id));
     setPendingDelete(null);
   }
@@ -285,7 +288,7 @@ export function TransactionsPage({ onLogout, userId, activeItem, onNavigate, use
       const cat = categories.find((c) => c.name === editCategory);
       if (!cat) { setEditError("Catégorie invalide"); return; }
       const amountValue = Math.abs(parseFloat(editAmount));
-      if (isNaN(amountValue) || amountValue <= 0) { setEditError("Montant invalide"); return; }
+      if (isNaN(amountValue) || amountValue <= 0 || amountValue > 1_000_000) { setEditError("Montant invalide (max. 1 000 000 €)"); return; }
       const { error } = await supabase
         .from("transactions")
         .update({ amount: amountValue, note: editMerchant, category_id: cat.id, date: editDate, type: editType })
@@ -697,9 +700,10 @@ export function TransactionsPage({ onLogout, userId, activeItem, onNavigate, use
                     </p>
                   </div>
                   <p className="text-xs text-fg-subtle">Cette action est irréversible.</p>
+                  {deleteError && <p className="text-xs text-red-400 mt-2">{deleteError}</p>}
                 </div>
                 <div className="px-5 py-4 border-t border-surface-border flex gap-3">
-                  <button onClick={() => setPendingDelete(null)} className="flex-1 py-2.5 rounded-xl bg-surface-elevated border border-surface-border text-sm text-fg-secondary font-medium hover:bg-surface-hover transition-colors">Annuler</button>
+                  <button onClick={() => { setPendingDelete(null); setDeleteError(""); }} className="flex-1 py-2.5 rounded-xl bg-surface-elevated border border-surface-border text-sm text-fg-secondary font-medium hover:bg-surface-hover transition-colors">Annuler</button>
                   <button onClick={handleConfirmDelete} className="flex-1 py-2.5 rounded-xl bg-red-500/15 border border-red-500/25 text-sm text-red-400 font-semibold hover:bg-red-500/25 transition-colors">Supprimer</button>
                 </div>
               </div>

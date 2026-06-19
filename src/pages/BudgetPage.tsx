@@ -430,7 +430,7 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate, userProfi
   async function handleSaveBudget(catId: string, rawValue: string) {
     setError("");
     const amount = Number(rawValue);
-    if (!rawValue || isNaN(amount) || amount <= 0) { setError("Le montant doit être supérieur à 0."); return; }
+    if (!rawValue || isNaN(amount) || amount <= 0 || amount > 1_000_000) { setError("Montant invalide (entre 0 et 1 000 000 €)."); return; }
     setSavingId(catId);
     const existing = budgetsByCategory[catId];
     if (existing) {
