@@ -355,8 +355,8 @@ export function DashboardPage({ onLogout, userId, activeItem, onNavigate, userPr
   }
 
   async function handleDeleteTransaction(id: string) {
-    await supabase.from("transactions").delete().eq("id", id);
-    setTransactions((prev) => prev.filter((tx) => tx.id !== id));
+    const { error } = await supabase.from("transactions").delete().eq("id", id);
+    if (!error) setTransactions((prev) => prev.filter((tx) => tx.id !== id));
   }
 
   const selMonthTransactions = useMemo(() => transactions.filter((tx) => monthKey(tx.date) === selectedMonthKey), [transactions, selectedMonthKey]);

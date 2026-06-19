@@ -453,8 +453,8 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate, userProfi
     try {
       if (!rawValue || amount === 0) {
         if (existing) {
-          await supabase.from("savings_budget_items").delete().eq("id", existing.id);
-          setSavingsBudgetItems(prev => prev.filter(i => i.id !== existing.id));
+          const { error: deleteErr } = await supabase.from("savings_budget_items").delete().eq("id", existing.id);
+          if (!deleteErr) setSavingsBudgetItems(prev => prev.filter(i => i.id !== existing.id));
         }
       } else if (existing) {
         const { data, error: err } = await supabase.from("savings_budget_items").update({ planned_amount: amount }).eq("id", existing.id).select("*").single();

@@ -376,6 +376,7 @@ export function SavingsPage({ onLogout, userId, activeItem, onNavigate, userProf
   const [updateError, setUpdateError] = useState("");
 
   const [formError, setFormError] = useState("");
+  const [deleteError, setDeleteError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
   const depositInputRef = useRef<HTMLInputElement>(null);
@@ -444,15 +445,17 @@ export function SavingsPage({ onLogout, userId, activeItem, onNavigate, userProf
 
   async function handleGoalDelete() {
     if (!deleteGoal) return;
-    await supabase.from("savings_goals").delete().eq("id", deleteGoal.id);
+    const { error } = await supabase.from("savings_goals").delete().eq("id", deleteGoal.id);
+    if (error) { setDeleteError("Impossible de supprimer cet objectif."); return; }
     setGoals(prev => prev.filter(g => g.id !== deleteGoal.id));
     setDeleteGoal(null);
+    setDeleteError("");
   }
 
   async function handleDeposit() {
     if (!depositGoal) return;
     const amt = parseFloat(depositAmt);
-    if (isNaN(amt) || amt <= 0) { setDepositError("Montant invalide."); return; }
+    if (isNaN(amt) || amt <= 0 || amt > 1_000_000) { setDepositError("Montant invalide (max. 1 000 000 €)."); return; }
     const next = depositType === "add" ? depositGoal.current_amount + amt : Math.max(0, depositGoal.current_amount - amt);
     setIsSaving(true);
     const { data, error } = await supabase.from("savings_goals").update({ current_amount: next }).eq("id", depositGoal.id).select("*").single();
@@ -496,15 +499,17 @@ export function SavingsPage({ onLogout, userId, activeItem, onNavigate, userProf
 
   async function handlePlacementDelete() {
     if (!deletePlacement) return;
-    await supabase.from("savings_placements").delete().eq("id", deletePlacement.id);
+    const { error } = await supabase.from("savings_placements").delete().eq("id", deletePlacement.id);
+    if (error) { setDeleteError("Impossible de supprimer ce placement."); return; }
     setPlacements(prev => prev.filter(p => p.id !== deletePlacement.id));
     setDeletePlacement(null);
+    setDeleteError("");
   }
 
   async function handleUpdateValue() {
     if (!updatePlacement) return;
     const val = parseFloat(updateValue);
-    if (isNaN(val) || val < 0) { setUpdateError("Valeur invalide."); return; }
+    if (isNaN(val) || val < 0 || val > 999_999_999) { setUpdateError("Valeur invalide (max. 999 999 999 €)."); return; }
     setIsSaving(true);
     const { data, error } = await supabase.from("savings_placements").update({ current_value: val }).eq("id", updatePlacement.id).select("*").single();
     setIsSaving(false);
@@ -781,9 +786,10 @@ export function SavingsPage({ onLogout, userId, activeItem, onNavigate, userProf
                     <div><p className="text-sm font-medium text-fg">{deleteGoal.name}</p><p className="text-xs text-fg-subtle mt-0.5">{fmt(deleteGoal.current_amount)} € épargnés</p></div>
                   </div>
                   <p className="text-xs text-fg-subtle">Cette action est irréversible.</p>
+                  {deleteError && <p className="text-xs text-red-400">{deleteError}</p>}
                 </div>
                 <div className="px-5 py-4 border-t border-surface-border flex gap-3">
-                  <button onClick={() => setDeleteGoal(null)} className="flex-1 h-11 rounded-xl bg-surface-elevated border border-surface-border text-sm text-fg-secondary font-medium hover:bg-surface-hover transition-colors">Annuler</button>
+                  <button onClick={() => { setDeleteGoal(null); setDeleteError(""); }} className="flex-1 h-11 rounded-xl bg-surface-elevated border border-surface-border text-sm text-fg-secondary font-medium hover:bg-surface-hover transition-colors">Annuler</button>
                   <button onClick={() => void handleGoalDelete()} className="flex-1 h-11 rounded-xl bg-red-500/15 border border-red-500/25 text-sm text-red-400 font-semibold hover:bg-red-500/25 transition-colors">Supprimer</button>
                 </div>
               </div>
@@ -920,9 +926,10 @@ export function SavingsPage({ onLogout, userId, activeItem, onNavigate, userProf
                     <div><p className="text-sm font-medium text-fg">{deletePlacement.name}</p><p className="text-xs text-fg-subtle mt-0.5">{fmt(deletePlacement.current_value)} € placés</p></div>
                   </div>
                   <p className="text-xs text-fg-subtle">Cette action est irréversible.</p>
+                  {deleteError && <p className="text-xs text-red-400">{deleteError}</p>}
                 </div>
                 <div className="px-5 py-4 border-t border-surface-border flex gap-3">
-                  <button onClick={() => setDeletePlacement(null)} className="flex-1 h-11 rounded-xl bg-surface-elevated border border-surface-border text-sm text-fg-secondary font-medium hover:bg-surface-hover transition-colors">Annuler</button>
+                  <button onClick={() => { setDeletePlacement(null); setDeleteError(""); }} className="flex-1 h-11 rounded-xl bg-surface-elevated border border-surface-border text-sm text-fg-secondary font-medium hover:bg-surface-hover transition-colors">Annuler</button>
                   <button onClick={() => void handlePlacementDelete()} className="flex-1 h-11 rounded-xl bg-red-500/15 border border-red-500/25 text-sm text-red-400 font-semibold hover:bg-red-500/25 transition-colors">Supprimer</button>
                 </div>
               </div>

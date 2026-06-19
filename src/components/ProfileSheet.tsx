@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangleIcon, LogOutIcon, MoonIcon, SunIcon, TagIcon, Trash2Icon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useTheme } from "../hooks/useTheme";
 
@@ -22,6 +22,10 @@ export function getInitials(userProfile: { firstName: string; lastName: string; 
 export function ProfileSheet({ isOpen, onClose, userProfile, onNavigate, onLogout }: ProfileSheetProps) {
   const { theme, toggleTheme } = useTheme();
   const [deleteStep, setDeleteStep] = useState<"idle" | "confirm" | "deleting">("idle");
+
+  useEffect(() => {
+    if (!isOpen) setDeleteStep("idle");
+  }, [isOpen]);
 
   const emailFallback = userProfile?.email?.split("@")[0] ?? "Utilisateur";
   const firstName = userProfile?.firstName || emailFallback;
