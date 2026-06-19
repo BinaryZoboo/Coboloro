@@ -17,6 +17,7 @@ interface CategoriesPageProps {
   userId: string;
   activeItem?: string;
   onNavigate?: (itemId: string) => void;
+  userProfile?: { firstName: string; lastName: string; email: string } | null;
 }
 
 export function CategoriesPage({
@@ -24,6 +25,7 @@ export function CategoriesPage({
   userId,
   activeItem,
   onNavigate,
+  userProfile,
 }: CategoriesPageProps) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -36,32 +38,9 @@ export function CategoriesPage({
   const [editingType, setEditingType] = useState<Category["type"]>("expense");
   const [isSaving, setIsSaving] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Category | null>(null);
-  const [userProfile, setUserProfile] = useState<{
-    firstName: string;
-    lastName: string;
-    email: string;
-  } | null>(null);
 
   useEffect(() => {
     let isMounted = true;
-
-    async function loadProfile() {
-      const { data: user } = await supabase.auth.getUser();
-      if (!user.user?.email) return;
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("first_name, last_name")
-        .eq("id", userId)
-        .single();
-      if (error) { console.error("Failed to load profile", error); return; }
-      if (data && isMounted) {
-        setUserProfile({
-          firstName: data.first_name || "Utilisateur",
-          lastName: data.last_name || "",
-          email: user.user.email,
-        });
-      }
-    }
 
     async function loadCategories() {
       setIsLoading(true);
@@ -77,7 +56,6 @@ export function CategoriesPage({
       if (isMounted) { setCategories((data ?? []) as Category[]); setIsLoading(false); }
     }
 
-    void loadProfile();
     void loadCategories();
     return () => { isMounted = false; };
   }, [userId]);
@@ -158,13 +136,9 @@ export function CategoriesPage({
 
   async function handleDeleteCategory(categoryId: string) {
     setActionError(""); setIsSaving(true);
-    const { error: txError } = await supabase.from("transactions").delete().eq("category_id", categoryId);
-    if (txError) {
-      setIsSaving(false);
-      console.error("Failed to delete transactions for category", txError);
-      setActionError("Impossible de supprimer les transactions liees a cette categorie.");
-      return;
-    }
+    // Clean up budget limits for this category (transactions keep their data via FK SET NULL)
+    await supabase.from("budgets").delete().eq("category_id", categoryId).eq("user_id", userId);
+    await supabase.from("recurring_budgets").delete().eq("category_id", categoryId).eq("user_id", userId);
     const { error } = await supabase.from("categories").delete().eq("id", categoryId);
     setIsSaving(false);
     if (error) { console.error("Failed to delete category", error); setActionError("Impossible de supprimer cette categorie."); return; }
@@ -185,7 +159,7 @@ export function CategoriesPage({
 
   return (
     <div className="min-h-screen w-full bg-surface">
-      <Sidebar onLogout={onLogout} activeItem={activeItem} onNavigate={onNavigate} userProfile={userProfile} />
+      <Sidebar onLogout={onLogout} activeItem={activeItem} onNavigate={onNavigate} userProfile={userProfile ?? null} />
 
       <main className="lg:ml-[var(--sidebar-width)] transition-all duration-200">
         <header className="sticky top-0 z-20 glass border-b border-surface-border">
@@ -415,7 +389,7 @@ export function CategoriesPage({
                 Tu es sur de vouloir supprimer la categorie
                 <span className="text-fg font-semibold"> {pendingDelete.name}</span> ?
               </p>
-              <p className="text-xs text-fg-subtle">Cette action est definitive. Toutes les transactions liees seront supprimees.</p>
+              <p className="text-xs text-fg-subtle">Cette action est definitive. Les transactions associees seront conservees sans categorie.</p>
               {actionError ? <p className="text-xs text-red-400">{actionError}</p> : null}
             </div>
             <div className="px-6 pb-5 flex items-center justify-end gap-3">

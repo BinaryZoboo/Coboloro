@@ -47,6 +47,7 @@ export function NotificationBell({ userId }: NotificationBellProps) {
         supabase
           .from("transactions")
           .select("id")
+          .eq("user_id", userId)
           .eq("type", "expense")
           .or("note.is.null,note.eq."),
       ]);

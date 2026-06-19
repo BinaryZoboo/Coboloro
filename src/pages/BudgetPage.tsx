@@ -15,8 +15,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { DailySpendingChart } from "../components/DailySpendingChart";
 import { MobileSpendingPie } from "../components/MobileSpendingPie";
 import { NotificationBell } from "../components/NotificationBell";
+import { ProfileSheet, getInitials } from "../components/ProfileSheet";
 import { Sidebar } from "../components/Sidebar";
 import { supabase } from "../lib/supabaseClient";
+import { nextAndAfterMonthKeys } from "../lib/utils";
 import type { Category } from "../transaction";
 
 interface BudgetPageProps {
@@ -24,6 +26,7 @@ interface BudgetPageProps {
   userId: string;
   activeItem?: string;
   onNavigate?: (itemId: string) => void;
+  userProfile?: { firstName: string; lastName: string; email: string } | null;
 }
 
 interface BudgetRow {
@@ -276,14 +279,14 @@ function SavingsRow({ item, planned, onSave, isSavingKey }: SavingsRowProps) {
   );
 }
 
-export function BudgetPage({ onLogout, userId, activeItem, onNavigate }: BudgetPageProps) {
+export function BudgetPage({ onLogout, userId, activeItem, onNavigate, userProfile }: BudgetPageProps) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [budgets, setBudgets] = useState<BudgetRow[]>([]);
   const [transactions, setTransactions] = useState<BudgetTransaction[]>([]);
   const [recurringBudgets, setRecurringBudgets] = useState<RecurringBudget[]>([]);
   const [savingsItems, setSavingsItems] = useState<SimpleSavingsItem[]>([]);
   const [savingsBudgetItems, setSavingsBudgetItems] = useState<SavingsBudgetItem[]>([]);
-  const [userProfile, setUserProfile] = useState<{ firstName: string; lastName: string; email: string } | null>(null);
+  const [showProfile, setShowProfile] = useState(false);
   const [activeMonthStart, setActiveMonthStart] = useState(() => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), 1); });
   const [savingId, setSavingId] = useState<string | null>(null);
   const [savingSavingsId, setSavingSavingsId] = useState<string | null>(null);
@@ -300,19 +303,13 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate }: BudgetP
     let mounted = true;
 
     async function loadAll() {
-      const { data: user } = await supabase.auth.getUser();
-      if (user.user?.email) {
-        const { data } = await supabase.from("profiles").select("first_name, last_name").eq("id", userId).single();
-        if (data && mounted) setUserProfile({ firstName: data.first_name || "Utilisateur", lastName: data.last_name || "", email: user.user.email });
-      }
-
       const [{ data: cats }, { data: buds }, { data: txs }, { data: recs }, { data: goals }, { data: placements }, { data: savBudgets }] = await Promise.all([
         supabase.from("categories").select("id, name, type").order("name"),
         supabase.from("budgets").select("id, category_id, month, planned_amount").eq("user_id", userId).eq("month", activeMonthKey),
         supabase.from("transactions").select("amount, type, date, category_id").lte("date", new Date().toISOString().split("T")[0]).order("date", { ascending: false }),
         supabase.from("recurring_budgets").select("id, category_id, amount").eq("user_id", userId),
-        supabase.from("savings_goals").select("id, name, emoji").order("created_at", { ascending: false }),
-        supabase.from("savings_placements").select("id, name, emoji, type").order("created_at", { ascending: false }),
+        supabase.from("savings_goals").select("id, name, emoji").eq("user_id", userId).order("created_at", { ascending: false }),
+        supabase.from("savings_placements").select("id, name, emoji, type").eq("user_id", userId).order("created_at", { ascending: false }),
         supabase.from("savings_budget_items").select("*").eq("user_id", userId).eq("month", activeMonthKey),
       ]);
 
@@ -331,17 +328,14 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate }: BudgetP
       if (recs) {
         setRecurringBudgets(recs as RecurringBudget[]);
         if (isCurrentMonth && recs.length > 0) {
-          const today = new Date();
-          const nm = today.getMonth() + 2; const ny = nm > 12 ? today.getFullYear() + 1 : today.getFullYear(); const nn = nm > 12 ? nm - 12 : nm;
-          const nextKey = `${ny}-${String(nn).padStart(2, "0")}-01`;
-          const afterM = nn + 1; const afterY = afterM > 12 ? ny + 1 : ny;
-          const afterKey = `${afterM > 12 ? afterY : afterY}-${String(afterM > 12 ? 1 : afterM).padStart(2, "0")}-01`;
-          for (const r of recs as RecurringBudget[]) {
-            const { data: eb } = await supabase.from("budgets").select("id").eq("user_id", userId).eq("category_id", r.category_id).eq("month", nextKey).maybeSingle();
-            if (!eb) await supabase.from("budgets").insert({ user_id: userId, category_id: r.category_id, month: nextKey, planned_amount: r.amount });
-            const { data: et } = await supabase.from("transactions").select("id").eq("user_id", userId).eq("category_id", r.category_id).gte("date", nextKey).lt("date", afterKey).maybeSingle();
-            if (!et) await supabase.from("transactions").insert({ user_id: userId, category_id: r.category_id, amount: r.amount, type: "expense", date: nextKey, note: "Dépense récurrente" });
-          }
+          const { nextKey } = nextAndAfterMonthKeys(new Date());
+          const rows = (recs as RecurringBudget[]).map((r) => ({
+            user_id: userId,
+            category_id: r.category_id,
+            month: nextKey,
+            planned_amount: r.amount,
+          }));
+          await supabase.from("budgets").upsert(rows, { onConflict: "user_id,category_id,month", ignoreDuplicates: true });
         }
       }
     }
@@ -478,20 +472,13 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate }: BudgetP
 
   async function handleToggleRecurring(catId: string) {
     setError("");
-    const now = new Date();
     if (!isCurrentMonth) { setError("La récurrence ne peut être modifiée que pour le mois en cours."); return; }
     const existing = recurringBudgets.find((r) => r.category_id === catId);
     if (existing) {
       const { error: err } = await supabase.from("recurring_budgets").delete().eq("id", existing.id);
       if (err) { setError("Erreur lors de la suppression."); return; }
-      const nm = now.getMonth() + 2; const ny = nm > 12 ? now.getFullYear() + 1 : now.getFullYear(); const nn = nm > 12 ? nm - 12 : nm;
-      const nextKey = `${ny}-${String(nn).padStart(2, "0")}-01`;
-      const am = nn + 1; const ay = am > 12 ? ny + 1 : ny; const an = am > 12 ? 1 : am;
-      const afterKey = `${ay}-${String(an).padStart(2, "0")}-01`;
-      await supabase.from("transactions").delete().eq("user_id", userId).eq("category_id", catId).gte("date", nextKey).lt("date", afterKey);
+      const { nextKey } = nextAndAfterMonthKeys(new Date());
       await supabase.from("budgets").delete().eq("user_id", userId).eq("category_id", catId).eq("month", nextKey);
-      const { data: updTx } = await supabase.from("transactions").select("amount, type, date, category_id").order("date", { ascending: false });
-      if (updTx) setTransactions(updTx.map((r) => ({ category_id: r.category_id as string, amount: Number(r.amount ?? 0), type: r.type as "income" | "expense", date: r.date as string })));
       setRecurringBudgets((p) => p.filter((r) => r.id !== existing.id));
     } else {
       const bud = budgetsByCategory[catId];
@@ -500,30 +487,32 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate }: BudgetP
       if (err) { setError("Erreur lors de l'activation."); return; }
       if (data) {
         setRecurringBudgets((p) => [...p, data as RecurringBudget]);
-        const nm = now.getMonth() + 2; const ny = nm > 12 ? now.getFullYear() + 1 : now.getFullYear(); const nn = nm > 12 ? nm - 12 : nm;
-        const nextKey = `${ny}-${String(nn).padStart(2, "0")}-01`;
-        const am = nn + 1; const ay = am > 12 ? ny + 1 : ny; const an = am > 12 ? 1 : am;
-        const afterKey = `${ay}-${String(an).padStart(2, "0")}-01`;
-        const { data: eb } = await supabase.from("budgets").select("id").eq("user_id", userId).eq("category_id", catId).eq("month", nextKey).maybeSingle();
-        if (!eb) await supabase.from("budgets").insert({ user_id: userId, category_id: catId, month: nextKey, planned_amount: bud.planned_amount });
-        const { data: et } = await supabase.from("transactions").select("id").eq("user_id", userId).eq("category_id", catId).gte("date", nextKey).lt("date", afterKey).maybeSingle();
-        if (!et) {
-          await supabase.from("transactions").insert({ user_id: userId, category_id: catId, amount: bud.planned_amount, type: "expense", date: nextKey, note: "Dépense récurrente" });
-          const { data: updTx } = await supabase.from("transactions").select("amount, type, date, category_id").order("date", { ascending: false });
-          if (updTx) setTransactions(updTx.map((r) => ({ category_id: r.category_id as string, amount: Number(r.amount ?? 0), type: r.type as "income" | "expense", date: r.date as string })));
-        }
+        const { nextKey } = nextAndAfterMonthKeys(new Date());
+        await supabase.from("budgets").upsert(
+          { user_id: userId, category_id: catId, month: nextKey, planned_amount: bud.planned_amount },
+          { onConflict: "user_id,category_id,month", ignoreDuplicates: true },
+        );
       }
     }
   }
 
   return (
     <div className="min-h-screen w-full bg-surface">
-      <Sidebar onLogout={onLogout} activeItem={activeItem} onNavigate={onNavigate} userProfile={userProfile} />
+      <Sidebar onLogout={onLogout} activeItem={activeItem} onNavigate={onNavigate} userProfile={userProfile ?? null} />
 
       <main className="lg:ml-[var(--sidebar-width)] transition-all duration-200 flex flex-col min-h-screen">
         <header className="sticky top-0 z-20 glass border-b border-surface-border flex-shrink-0">
           <div className="flex items-center justify-between px-4 py-3.5 lg:px-8 lg:py-4">
-            <h1 className="text-sm lg:text-base font-semibold text-fg">Budget</h1>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowProfile(true)}
+                className="lg:hidden w-9 h-9 rounded-lg bg-accent/10 border border-accent/25 flex items-center justify-center text-xs font-bold text-accent hover:bg-accent/15 transition-colors flex-shrink-0"
+                aria-label="Mon profil"
+              >
+                {getInitials(userProfile ?? null)}
+              </button>
+              <h1 className="text-sm lg:text-base font-semibold text-fg">Budget</h1>
+            </div>
             <div className="flex items-center gap-1.5">
               <button onClick={() => setActiveMonthStart((d) => addMonthsToDate(d, -1))} className="w-8 h-8 flex items-center justify-center rounded-lg text-fg-muted hover:text-fg hover:bg-surface-hover transition-colors" aria-label="Mois précédent">
                 <ArrowLeftIcon className="w-4 h-4" />
@@ -877,6 +866,7 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate }: BudgetP
           </div>
         </div>
       </main>
+      <ProfileSheet isOpen={showProfile} onClose={() => setShowProfile(false)} userProfile={userProfile ?? null} onNavigate={p => { setShowProfile(false); onNavigate?.(p); }} onLogout={onLogout} />
     </div>
   );
 }

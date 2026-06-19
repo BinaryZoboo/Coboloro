@@ -5,11 +5,12 @@ import {
   ArrowRightIcon,
   ArrowUpIcon,
   CalendarIcon,
-  PlusIcon,
+  PiggyBankIcon,
   TrendingUpIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { AddTransactionModal } from "../components/AddTransactionModal";
+import { ProfileSheet, getInitials } from "../components/ProfileSheet";
 import { DailySpendingChart } from "../components/DailySpendingChart";
 import { MobileSpendingPie } from "../components/MobileSpendingPie";
 import { MonthlyTrendChart } from "../components/MonthlyTrendChart";
@@ -24,11 +25,21 @@ import type {
   Transaction,
 } from "../transaction";
 
+interface SavingsGoal {
+  id: string;
+  name: string;
+  current_amount: number;
+  target_amount: number;
+  color: string;
+  emoji: string;
+}
+
 interface DashboardPageProps {
   onLogout: () => void;
   userId: string;
   activeItem?: string;
   onNavigate?: (itemId: string) => void;
+  userProfile?: { firstName: string; lastName: string; email: string } | null;
 }
 
 const defaultCategories: Array<Omit<Category, "id">> = [
@@ -87,6 +98,105 @@ function formatMonthLabel(key: string) {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
+function SavingsWidget({ goals, onViewAll }: { goals: SavingsGoal[]; onViewAll?: () => void }) {
+  const total    = goals.reduce((s, g) => s + g.current_amount, 0);
+  const totalTgt = goals.reduce((s, g) => s + g.target_amount, 0);
+  const globalPct = totalTgt > 0 ? Math.round((total / totalTgt) * 100) : 0;
+  const fmt = (n: number) => n.toLocaleString("fr-FR", { maximumFractionDigits: 0 });
+  const r = 26;
+  const circumference = 2 * Math.PI * r;
+
+  // Top 3 goals sorted by progress % (highest first)
+  const sorted = [...goals].sort((a, b) => {
+    const pa = a.target_amount > 0 ? a.current_amount / a.target_amount : 0;
+    const pb = b.target_amount > 0 ? b.current_amount / b.target_amount : 0;
+    return pb - pa;
+  });
+  const shown = sorted.slice(0, 3);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.22, delay: 0.18 }}
+      className="rounded-2xl border border-surface-border bg-surface-card p-4"
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <PiggyBankIcon className="w-4 h-4 text-accent" />
+          <span className="text-sm font-semibold text-fg">Épargne</span>
+        </div>
+        {onViewAll && (
+          <button onClick={onViewAll} className="text-xs font-medium text-accent hover:underline">
+            Voir tout →
+          </button>
+        )}
+      </div>
+
+      {goals.length === 0 ? (
+        <div className="py-4 text-center">
+          <p className="text-xs text-fg-subtle mb-2">Aucun objectif d'épargne</p>
+          {onViewAll && (
+            <button onClick={onViewAll} className="text-xs font-semibold text-accent hover:underline">
+              Créer un objectif →
+            </button>
+          )}
+        </div>
+      ) : (
+        <>
+          {/* Donut + totaux */}
+          <div className="flex items-center gap-3 px-3 py-3 rounded-xl bg-surface-elevated mb-3">
+            <svg width="64" height="64" viewBox="0 0 64 64" className="flex-shrink-0">
+              <circle cx="32" cy="32" r={r} fill="none" stroke="var(--color-surface-border)" strokeWidth="6" />
+              <circle
+                cx="32" cy="32" r={r}
+                fill="none"
+                stroke="var(--color-accent)"
+                strokeWidth="6"
+                strokeDasharray={`${(globalPct / 100) * circumference} ${circumference}`}
+                strokeLinecap="round"
+                transform="rotate(-90 32 32)"
+              />
+              <text x="32" y="29" textAnchor="middle" fontSize="13" fontWeight="800" fill="var(--color-accent)">{globalPct}%</text>
+              <text x="32" y="42" textAnchor="middle" fontSize="8" fill="var(--color-fg-subtle)">global</text>
+            </svg>
+            <div>
+              <p className="text-lg font-bold text-fg tabular-nums">{fmt(total)} €</p>
+              <p className="text-xs text-fg-subtle mt-0.5">sur {fmt(totalTgt)} € total</p>
+              <p className="text-[10px] text-fg-disabled mt-1">{goals.length} objectif{goals.length > 1 ? "s" : ""}</p>
+            </div>
+          </div>
+
+          {/* Top 3 goals */}
+          <div className="space-y-2.5">
+            {shown.map((g) => {
+              const pct = g.target_amount > 0 ? Math.min((g.current_amount / g.target_amount) * 100, 100) : 0;
+              return (
+                <div key={g.id}>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-xs text-fg-subtle truncate mr-2">{g.emoji} {g.name}</span>
+                    <span className="text-xs font-semibold tabular-nums flex-shrink-0" style={{ color: g.color }}>
+                      {fmt(g.current_amount)} <span className="text-fg-disabled font-normal">/ {fmt(g.target_amount)} €</span>
+                    </span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-surface-elevated overflow-hidden">
+                    <div className="h-full rounded-full transition-all duration-700"
+                      style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${g.color}70, ${g.color})` }} />
+                  </div>
+                </div>
+              );
+            })}
+            {goals.length > 3 && (
+              <p className="text-[10px] text-fg-disabled text-center">+{goals.length - 3} autre{goals.length - 3 > 1 ? "s" : ""}</p>
+            )}
+          </div>
+        </>
+      )}
+    </motion.div>
+  );
+}
+
 interface KpiCardProps {
   label: string;
   value: number;
@@ -129,29 +239,17 @@ function KpiCard({ label, value, delta, color, delay = 0 }: KpiCardProps) {
   );
 }
 
-export function DashboardPage({ onLogout, userId, activeItem, onNavigate }: DashboardPageProps) {
+export function DashboardPage({ onLogout, userId, activeItem, onNavigate, userProfile }: DashboardPageProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [monthlyBudgetTotal, setMonthlyBudgetTotal] = useState(0);
   const [selectedMonthKey, setSelectedMonthKey] = useState(currentMonthKey());
-  const [userProfile, setUserProfile] = useState<{
-    firstName: string;
-    lastName: string;
-    email: string;
-  } | null>(null);
+  const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>([]);
+  const [showProfile, setShowProfile] = useState(false);
 
   useEffect(() => {
     let mounted = true;
-
-    async function loadProfile() {
-      const { data: user } = await supabase.auth.getUser();
-      if (!user.user?.email) return;
-      const { data } = await supabase.from("profiles").select("first_name, last_name").eq("id", userId).single();
-      if (data && mounted) {
-        setUserProfile({ firstName: data.first_name || "Utilisateur", lastName: data.last_name || "", email: user.user.email });
-      }
-    }
 
     async function loadCategories() {
       const { data } = await supabase.from("categories").select("id, name, type").order("name");
@@ -175,9 +273,18 @@ export function DashboardPage({ onLogout, userId, activeItem, onNavigate }: Dash
       }));
     }
 
-    void loadProfile();
+    async function loadSavingsGoals() {
+      const { data } = await supabase
+        .from("savings_goals")
+        .select("id, name, current_amount, target_amount, color, emoji")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: true });
+      if (data && mounted) setSavingsGoals(data as SavingsGoal[]);
+    }
+
     void loadCategories();
     void loadTransactions();
+    void loadSavingsGoals();
     return () => { mounted = false; };
   }, [userId]);
 
@@ -270,18 +377,29 @@ export function DashboardPage({ onLogout, userId, activeItem, onNavigate }: Dash
 
   return (
     <div className="min-h-screen w-full bg-surface">
-      <Sidebar onLogout={onLogout} activeItem={activeItem} onNavigate={onNavigate} userProfile={userProfile} todaySpending={todaySpending} />
+      <Sidebar onLogout={onLogout} activeItem={activeItem} onNavigate={onNavigate} userProfile={userProfile ?? null} todaySpending={todaySpending} />
 
       <main className="lg:ml-[var(--sidebar-width)] transition-all duration-200">
         <header className="sticky top-0 z-20 glass border-b border-surface-border">
           <div className="flex items-center justify-between px-4 py-3.5 lg:px-8 lg:py-4">
-            <div>
-              <motion.h1 initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="text-sm lg:text-base font-semibold text-fg">
-                Bonjour, {userProfile?.firstName || "vous"} 👋
-              </motion.h1>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <CalendarIcon className="w-3 h-3 text-fg-subtle" />
-                <p className="text-[10px] text-fg-subtle capitalize">{todayLabel}</p>
+            <div className="flex items-center gap-3">
+              {/* Mobile: avatar ouvre le profil */}
+              <button
+                onClick={() => setShowProfile(true)}
+                className="lg:hidden w-9 h-9 rounded-lg bg-accent/10 border border-accent/25 flex items-center justify-center text-xs font-bold text-accent hover:bg-accent/15 transition-colors flex-shrink-0"
+                aria-label="Mon profil"
+              >
+                {getInitials(userProfile ?? null)}
+              </button>
+              {/* Desktop: salutation */}
+              <div className="hidden lg:block">
+                <motion.h1 initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="text-base font-semibold text-fg">
+                  Bonjour, {userProfile?.firstName || "vous"} 👋
+                </motion.h1>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <CalendarIcon className="w-3 h-3 text-fg-subtle" />
+                  <p className="text-[10px] text-fg-subtle capitalize">{todayLabel}</p>
+                </div>
               </div>
             </div>
 
@@ -292,10 +410,6 @@ export function DashboardPage({ onLogout, userId, activeItem, onNavigate }: Dash
               <span className="text-xs font-medium text-fg min-w-[80px] text-center hidden sm:inline">{formatMonthLabel(selectedMonthKey)}</span>
               <button onClick={() => setSelectedMonthKey((k) => addMonths(k, 1))} className="w-8 h-8 flex items-center justify-center rounded-lg text-fg-muted hover:text-fg hover:bg-surface-hover transition-colors" aria-label="Mois suivant">
                 <ArrowRightIcon className="w-4 h-4" />
-              </button>
-              <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-accent text-accent-fg text-xs font-semibold hover:bg-accent-light transition-colors min-h-[44px]" style={{ boxShadow: "var(--shadow-accent-sm)" }}>
-                <PlusIcon className="w-4 h-4" />
-                <span className="hidden sm:inline">Ajouter</span>
               </button>
               <NotificationBell userId={userId} />
             </div>
@@ -308,6 +422,11 @@ export function DashboardPage({ onLogout, userId, activeItem, onNavigate }: Dash
             <KpiCard label="Dépenses" value={selExpense} delta={expenseDelta} color="red" delay={0.05} />
             <KpiCard label="Revenus" value={selIncome} color="blue" delay={0.1} />
             <KpiCard label={monthlyBudgetTotal > 0 ? "Budget restant" : "Économies"} value={monthlyBudgetTotal > 0 ? selBudgetRestant : selNetBalance} color={monthlyBudgetTotal > 0 ? (selBudgetRestant > 0 ? "green" : "red") : "accent"} delay={0.15} />
+          </div>
+
+          {/* Widget épargne — mobile uniquement */}
+          <div className="lg:hidden">
+            <SavingsWidget goals={savingsGoals} onViewAll={() => onNavigate?.("savings")} />
           </div>
 
           {/* Mobile: pie + recent transactions */}
@@ -360,6 +479,7 @@ export function DashboardPage({ onLogout, userId, activeItem, onNavigate }: Dash
       </main>
 
       <AddTransactionModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSubmit={handleAddTransaction} categories={categories} />
+      <ProfileSheet isOpen={showProfile} onClose={() => setShowProfile(false)} userProfile={userProfile ?? null} onNavigate={p => { setShowProfile(false); onNavigate?.(p); }} onLogout={onLogout} />
     </div>
   );
 }

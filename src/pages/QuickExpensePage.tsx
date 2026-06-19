@@ -65,6 +65,7 @@ export function QuickExpensePage({ onHome, userId }: QuickExpensePageProps) {
     supabase
       .from("categories")
       .select("id, name, type")
+      .eq("user_id", userId)
       .eq("type", "expense")
       .order("name")
       .then(({ data }) => {
