@@ -71,11 +71,6 @@ function wizardStorageKey(userId: string, monthKey: string): string {
   return `coboloro:budget-wizard:${userId}:${monthKey}`;
 }
 
-function previousMonthKeyOf(monthKey: string): string {
-  const [y, m] = monthKey.split("-").map(Number);
-  return toMonthKey(new Date(y, m - 2, 1));
-}
-
 const pieColors = [
   "#4F7EFF", "#2B5CE8", "#7BA0FF", "#6190FF",
   "#1A45C4", "#3B6AE0", "#5C8AFF", "#8FB0FF",
@@ -302,7 +297,6 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate, userProfi
   const [savingId, setSavingId] = useState<string | null>(null);
   const [savingSavingsId, setSavingSavingsId] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const [previousMonthBudgets, setPreviousMonthBudgets] = useState<Record<string, number>>({});
   const [showWizard, setShowWizard] = useState(false);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
 
@@ -317,7 +311,7 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate, userProfi
     let mounted = true;
 
     async function loadAll() {
-      const [{ data: cats }, { data: buds }, { data: txs }, { data: recs }, { data: goals }, { data: placements }, { data: savBudgets }, { data: prevBuds }] = await Promise.all([
+      const [{ data: cats }, { data: buds }, { data: txs }, { data: recs }, { data: goals }, { data: placements }, { data: savBudgets }] = await Promise.all([
         supabase.from("categories").select("id, name, type").eq("user_id", userId).order("name"),
         supabase.from("budgets").select("id, category_id, month, planned_amount").eq("user_id", userId).eq("month", activeMonthKey),
         supabase.from("transactions").select("amount, type, date, category_id").eq("user_id", userId).lte("date", toDateKey(new Date())).order("date", { ascending: false }),
@@ -325,21 +319,12 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate, userProfi
         supabase.from("savings_goals").select("id, name, emoji").eq("user_id", userId).order("created_at", { ascending: false }),
         supabase.from("savings_placements").select("id, name, emoji, type").eq("user_id", userId).order("created_at", { ascending: false }),
         supabase.from("savings_budget_items").select("*").eq("user_id", userId).eq("month", activeMonthKey),
-        supabase.from("budgets").select("category_id, planned_amount").eq("user_id", userId).eq("month", previousMonthKeyOf(activeMonthKey)),
       ]);
 
       if (!mounted) return;
       if (cats) setCategories(cats as Category[]);
       if (buds) setBudgets(buds as BudgetRow[]);
       if (txs) setTransactions(txs.map((r) => ({ category_id: r.category_id as string, amount: Number(r.amount ?? 0), type: r.type as "income" | "expense", date: r.date as string })));
-      if (prevBuds) {
-        setPreviousMonthBudgets(
-          (prevBuds as { category_id: string; planned_amount: number }[]).reduce(
-            (acc, b) => { acc[b.category_id] = Number(b.planned_amount ?? 0); return acc; },
-            {} as Record<string, number>,
-          ),
-        );
-      }
 
       const merged: SimpleSavingsItem[] = [
         ...((goals ?? []) as { id: string; name: string; emoji: string }[]).map(g => ({ id: g.id, name: g.name, emoji: g.emoji, sourceType: "goal" as const })),
@@ -399,6 +384,14 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate, userProfi
     }, {} as Record<string, number>);
   }, [activeMonthTx]);
 
+  const incomeReceivedByCategory = useMemo(() => {
+    return activeMonthTx.reduce((acc, tx) => {
+      if (tx.type !== "income") return acc;
+      acc[tx.category_id] = (acc[tx.category_id] ?? 0) + Math.abs(tx.amount);
+      return acc;
+    }, {} as Record<string, number>);
+  }, [activeMonthTx]);
+
   const avgThreeMonths = useMemo(() => {
     const totals: Record<string, number> = {};
     const monthsByCat: Record<string, Set<string>> = {};
@@ -438,18 +431,21 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate, userProfi
 
   const wizardIncomeItems = useMemo<WizardIncomeItem[]>(() => {
     return incomeCategories
-      .map((c) => {
-        const current = budgetsByCategory[c.id]?.planned_amount;
-        const prev = previousMonthBudgets[c.id];
-        return {
-          categoryId: c.id,
-          categoryName: c.name,
-          currentAmount: current ?? null,
-          suggestedAmount: current ?? prev ?? 0,
-        };
-      })
+      .filter((c) => (incomeReceivedByCategory[c.id] ?? 0) > 0)
+      .map((c) => ({
+        categoryId: c.id,
+        categoryName: c.name,
+        suggestedAmount: incomeReceivedByCategory[c.id],
+      }))
       .sort((a, b) => a.categoryName.localeCompare(b.categoryName));
-  }, [incomeCategories, budgetsByCategory, previousMonthBudgets]);
+  }, [incomeCategories, incomeReceivedByCategory]);
+
+  const additionalIncomeOptions = useMemo(() => {
+    return incomeCategories
+      .filter((c) => !((incomeReceivedByCategory[c.id] ?? 0) > 0))
+      .map((c) => ({ categoryId: c.id, categoryName: c.name }))
+      .sort((a, b) => a.categoryName.localeCompare(b.categoryName));
+  }, [incomeCategories, incomeReceivedByCategory]);
 
   const wizardRecurringItems = useMemo<WizardRecurringItem[]>(() => {
     return recurringBudgets
@@ -948,6 +944,7 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate, userProfi
         onClose={handleWizardClose}
         monthLabel={formatMonthYear(activeMonthStart)}
         incomeItems={wizardIncomeItems}
+        additionalIncomeOptions={additionalIncomeOptions}
         totalIncomeBudgeted={totalIncomeBudgeted}
         recurringItems={wizardRecurringItems}
         totalEngaged={totalEngaged}
