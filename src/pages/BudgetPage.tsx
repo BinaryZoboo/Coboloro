@@ -436,8 +436,13 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate, userProfi
     [incomeCategories, budgetsByCategory],
   );
 
+  const usedIncomeCategoryIds = useMemo(() => {
+    return new Set(transactions.filter((tx) => tx.type === "income").map((tx) => tx.category_id));
+  }, [transactions]);
+
   const wizardIncomeItems = useMemo<WizardIncomeItem[]>(() => {
     return incomeCategories
+      .filter((c) => usedIncomeCategoryIds.has(c.id))
       .map((c) => {
         const current = budgetsByCategory[c.id]?.planned_amount;
         const prev = previousMonthBudgets[c.id];
@@ -449,7 +454,7 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate, userProfi
         };
       })
       .sort((a, b) => a.categoryName.localeCompare(b.categoryName));
-  }, [incomeCategories, budgetsByCategory, previousMonthBudgets]);
+  }, [incomeCategories, usedIncomeCategoryIds, budgetsByCategory, previousMonthBudgets]);
 
   const wizardRecurringItems = useMemo<WizardRecurringItem[]>(() => {
     return recurringBudgets
