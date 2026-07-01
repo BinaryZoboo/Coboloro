@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { XIcon } from "lucide-react";
 import { useEffect, useState, type SyntheticEvent } from "react";
+import { toDateKey } from "../lib/utils";
 import type { Category, NewTransactionInput } from "../transaction";
 
 interface AddTransactionModalProps {
@@ -20,7 +21,7 @@ export function AddTransactionModal({
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(toDateKey(new Date()));
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const filteredCategories = categories.filter((cat) => cat.type === type);

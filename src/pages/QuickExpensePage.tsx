@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { toDateKey } from "../lib/utils";
 import type { Category } from "../transaction";
 
 interface QuickExpensePageProps {
@@ -142,7 +143,7 @@ export function QuickExpensePage({ onHome, userId }: QuickExpensePageProps) {
         amount: Math.abs(parsedAmount),
         type: "expense",
         note: note.trim() || "",
-        date: new Date().toISOString().split("T")[0],
+        date: toDateKey(new Date()),
       });
 
       if (error) throw error;
