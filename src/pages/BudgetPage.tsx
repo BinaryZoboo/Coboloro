@@ -7,6 +7,7 @@ import {
   PiggyBankIcon,
   RefreshCwIcon,
   SaveIcon,
+  SparklesIcon,
   TrendingDownIcon,
   TrendingUpIcon,
   XIcon,
@@ -14,6 +15,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DailySpendingChart } from "../components/DailySpendingChart";
 import { MobileSpendingPie } from "../components/MobileSpendingPie";
+import { MonthlyBudgetWizard, type WizardRecurringItem } from "../components/MonthlyBudgetWizard";
 import { NotificationBell } from "../components/NotificationBell";
 import { ProfileSheet, getInitials } from "../components/ProfileSheet";
 import { Sidebar } from "../components/Sidebar";
@@ -63,6 +65,16 @@ interface SimpleSavingsItem {
   emoji: string;
   badge?: string;
   sourceType: "goal" | "placement";
+}
+
+interface IncomeForecast {
+  id: string;
+  month: string;
+  planned_amount: number;
+}
+
+function wizardStorageKey(userId: string, monthKey: string): string {
+  return `coboloro:budget-wizard:${userId}:${monthKey}`;
 }
 
 const pieColors = [
@@ -291,6 +303,9 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate, userProfi
   const [savingId, setSavingId] = useState<string | null>(null);
   const [savingSavingsId, setSavingSavingsId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [incomeForecasts, setIncomeForecasts] = useState<IncomeForecast[]>([]);
+  const [showWizard, setShowWizard] = useState(false);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
 
   const activeMonthKey = useMemo(() => toMonthKey(activeMonthStart), [activeMonthStart]);
 
@@ -303,7 +318,7 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate, userProfi
     let mounted = true;
 
     async function loadAll() {
-      const [{ data: cats }, { data: buds }, { data: txs }, { data: recs }, { data: goals }, { data: placements }, { data: savBudgets }] = await Promise.all([
+      const [{ data: cats }, { data: buds }, { data: txs }, { data: recs }, { data: goals }, { data: placements }, { data: savBudgets }, { data: incFcs }] = await Promise.all([
         supabase.from("categories").select("id, name, type").eq("user_id", userId).order("name"),
         supabase.from("budgets").select("id, category_id, month, planned_amount").eq("user_id", userId).eq("month", activeMonthKey),
         supabase.from("transactions").select("amount, type, date, category_id").eq("user_id", userId).lte("date", toDateKey(new Date())).order("date", { ascending: false }),
@@ -311,12 +326,14 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate, userProfi
         supabase.from("savings_goals").select("id, name, emoji").eq("user_id", userId).order("created_at", { ascending: false }),
         supabase.from("savings_placements").select("id, name, emoji, type").eq("user_id", userId).order("created_at", { ascending: false }),
         supabase.from("savings_budget_items").select("*").eq("user_id", userId).eq("month", activeMonthKey),
+        supabase.from("income_forecasts").select("id, month, planned_amount").eq("user_id", userId),
       ]);
 
       if (!mounted) return;
       if (cats) setCategories(cats as Category[]);
       if (buds) setBudgets(buds as BudgetRow[]);
       if (txs) setTransactions(txs.map((r) => ({ category_id: r.category_id as string, amount: Number(r.amount ?? 0), type: r.type as "income" | "expense", date: r.date as string })));
+      if (incFcs) setIncomeForecasts(incFcs as IncomeForecast[]);
 
       const merged: SimpleSavingsItem[] = [
         ...((goals ?? []) as { id: string; name: string; emoji: string }[]).map(g => ({ id: g.id, name: g.name, emoji: g.emoji, sourceType: "goal" as const })),
@@ -338,8 +355,10 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate, userProfi
           await supabase.from("budgets").upsert(rows, { onConflict: "user_id,category_id,month", ignoreDuplicates: true });
         }
       }
+      setIsDataLoaded(true);
     }
 
+    setIsDataLoaded(false);
     void loadAll();
     return () => { mounted = false; };
   }, [userId, activeMonthKey, isCurrentMonth]);
@@ -404,6 +423,49 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate, userProfi
   const totalEngaged = totalAllocated + totalSavingsPlanned;
   const reste = activeMonthIncome - totalEngaged;
   const usageRatio = totalAllocated > 0 ? Math.min(totalSpent / totalAllocated, 1) : 0;
+
+  const incomeForecastByMonth = useMemo(() => {
+    return incomeForecasts.reduce((acc, f) => { acc[f.month] = f; return acc; }, {} as Record<string, IncomeForecast>);
+  }, [incomeForecasts]);
+
+  const currentIncomeForecast = incomeForecastByMonth[activeMonthKey];
+  const previousMonthKey = useMemo(
+    () => toMonthKey(new Date(activeMonthStart.getFullYear(), activeMonthStart.getMonth() - 1, 1)),
+    [activeMonthStart],
+  );
+  const previousIncomeForecast = incomeForecastByMonth[previousMonthKey];
+  const suggestedIncome = currentIncomeForecast?.planned_amount ?? previousIncomeForecast?.planned_amount ?? activeMonthIncome;
+
+  const wizardRecurringItems = useMemo<WizardRecurringItem[]>(() => {
+    return recurringBudgets
+      .map((r) => {
+        const cat = categories.find((c) => c.id === r.category_id);
+        return cat ? { categoryId: r.category_id, categoryName: cat.name, amount: r.amount } : null;
+      })
+      .filter((item): item is WizardRecurringItem => item !== null)
+      .sort((a, b) => a.categoryName.localeCompare(b.categoryName));
+  }, [recurringBudgets, categories]);
+
+  useEffect(() => {
+    if (!isDataLoaded || !isCurrentMonth) return;
+    if (localStorage.getItem(wizardStorageKey(userId, activeMonthKey))) return;
+    setShowWizard(true);
+  }, [isDataLoaded, isCurrentMonth, userId, activeMonthKey]);
+
+  function handleWizardClose() {
+    localStorage.setItem(wizardStorageKey(userId, activeMonthKey), "done");
+    setShowWizard(false);
+  }
+
+  async function handleSaveIncomeForecast(amount: number) {
+    const { data, error: err } = await supabase
+      .from("income_forecasts")
+      .upsert({ user_id: userId, month: activeMonthKey, planned_amount: amount }, { onConflict: "user_id,month" })
+      .select("id, month, planned_amount")
+      .single();
+    if (err) { setError("Impossible d'enregistrer le revenu prévu."); return; }
+    if (data) setIncomeForecasts((prev) => [...prev.filter((f) => f.month !== activeMonthKey), data as IncomeForecast]);
+  }
 
   const dailySpendingData = useMemo(() => {
     const totals: Record<string, number> = {};
@@ -514,6 +576,15 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate, userProfi
               <h1 className="text-sm lg:text-base font-semibold text-fg">Budget</h1>
             </div>
             <div className="flex items-center gap-1.5">
+              {isCurrentMonth && (
+                <button
+                  onClick={() => setShowWizard(true)}
+                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-accent/25 bg-accent/8 text-xs font-medium text-accent hover:bg-accent/15 transition-colors mr-1"
+                >
+                  <SparklesIcon className="w-3.5 h-3.5" />
+                  Guide du mois
+                </button>
+              )}
               <button onClick={() => setActiveMonthStart((d) => addMonthsToDate(d, -1))} className="w-8 h-8 flex items-center justify-center rounded-lg text-fg-muted hover:text-fg hover:bg-surface-hover transition-colors" aria-label="Mois précédent">
                 <ArrowLeftIcon className="w-4 h-4" />
               </button>
@@ -867,6 +938,18 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate, userProfi
         </div>
       </main>
       <ProfileSheet isOpen={showProfile} onClose={() => setShowProfile(false)} userProfile={userProfile ?? null} onNavigate={p => { setShowProfile(false); onNavigate?.(p); }} onLogout={onLogout} />
+      <MonthlyBudgetWizard
+        isOpen={showWizard}
+        onClose={handleWizardClose}
+        monthLabel={formatMonthYear(activeMonthStart)}
+        suggestedIncome={suggestedIncome}
+        hasExistingForecast={!!currentIncomeForecast}
+        recurringItems={wizardRecurringItems}
+        totalEngaged={totalEngaged}
+        onSaveIncome={handleSaveIncomeForecast}
+        onSaveExpenseAmount={handleSaveBudget}
+        onStopRecurring={handleToggleRecurring}
+      />
     </div>
   );
 }
