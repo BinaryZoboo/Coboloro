@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRightIcon, CheckIcon, RefreshCwIcon, SparklesIcon, WalletIcon, XIcon } from "lucide-react";
+import { ArrowRightIcon, CheckIcon, PlusIcon, RefreshCwIcon, SparklesIcon, WalletIcon, XIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export interface WizardRecurringItem {
@@ -11,8 +11,12 @@ export interface WizardRecurringItem {
 export interface WizardIncomeItem {
   categoryId: string;
   categoryName: string;
-  currentAmount: number | null;
   suggestedAmount: number;
+}
+
+export interface WizardIncomeOption {
+  categoryId: string;
+  categoryName: string;
 }
 
 interface MonthlyBudgetWizardProps {
@@ -20,6 +24,7 @@ interface MonthlyBudgetWizardProps {
   onClose: () => void;
   monthLabel: string;
   incomeItems: WizardIncomeItem[];
+  additionalIncomeOptions: WizardIncomeOption[];
   totalIncomeBudgeted: number;
   recurringItems: WizardRecurringItem[];
   totalEngaged: number;
@@ -44,6 +49,7 @@ export function MonthlyBudgetWizard({
   onClose,
   monthLabel,
   incomeItems,
+  additionalIncomeOptions,
   totalIncomeBudgeted,
   recurringItems,
   totalEngaged,
@@ -51,34 +57,52 @@ export function MonthlyBudgetWizard({
   onStopRecurring,
 }: MonthlyBudgetWizardProps) {
   const [stepIndex, setStepIndex] = useState(0);
-  const [incomeMode, setIncomeMode] = useState<"confirm" | "edit">("edit");
+  const [incomeMode, setIncomeMode] = useState<"confirm" | "edit">("confirm");
   const [incomeDraft, setIncomeDraft] = useState("");
+  const [addedExtraIds, setAddedExtraIds] = useState<Set<string>>(new Set());
+  const [extraCategoryId, setExtraCategoryId] = useState("");
+  const [extraDraft, setExtraDraft] = useState("");
   const [itemDraft, setItemDraft] = useState("");
   const [itemStillRecurring, setItemStillRecurring] = useState(true);
   const [stepError, setStepError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
-  const totalSteps = incomeItems.length + recurringItems.length + 1;
+  const hasExtraIncomeStep = additionalIncomeOptions.length > 0;
+  const extraIncomeStepIndex = incomeItems.length;
+  const expenseStartIndex = incomeItems.length + (hasExtraIncomeStep ? 1 : 0);
+  const totalSteps = expenseStartIndex + recurringItems.length + 1;
+
   const currentIncomeItem = stepIndex < incomeItems.length ? incomeItems[stepIndex] : null;
+  const isExtraIncomeStep = hasExtraIncomeStep && stepIndex === extraIncomeStepIndex;
   const currentExpenseItem =
-    stepIndex >= incomeItems.length && stepIndex < incomeItems.length + recurringItems.length
-      ? recurringItems[stepIndex - incomeItems.length]
+    stepIndex >= expenseStartIndex && stepIndex < expenseStartIndex + recurringItems.length
+      ? recurringItems[stepIndex - expenseStartIndex]
       : null;
   const isSummaryStep = stepIndex === totalSteps - 1;
+  const availableExtraOptions = additionalIncomeOptions.filter((o) => !addedExtraIds.has(o.categoryId));
 
   useEffect(() => {
     if (!isOpen) return;
     setStepIndex(0);
     setStepError("");
+    setAddedExtraIds(new Set());
+    setExtraCategoryId("");
+    setExtraDraft("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   useEffect(() => {
     if (!currentIncomeItem) return;
-    setIncomeMode(currentIncomeItem.currentAmount !== null ? "confirm" : "edit");
-    setIncomeDraft(currentIncomeItem.suggestedAmount > 0 ? String(currentIncomeItem.suggestedAmount) : "");
+    setIncomeMode("confirm");
+    setIncomeDraft(String(currentIncomeItem.suggestedAmount));
     setStepError("");
   }, [currentIncomeItem]);
+
+  useEffect(() => {
+    if (!isExtraIncomeStep) return;
+    setExtraCategoryId((prev) => (availableExtraOptions.some((o) => o.categoryId === prev) ? prev : availableExtraOptions[0]?.categoryId ?? ""));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isExtraIncomeStep, addedExtraIds]);
 
   useEffect(() => {
     if (!currentExpenseItem) return;
@@ -114,8 +138,19 @@ export function MonthlyBudgetWizard({
     }
   }
 
-  function handleIncomeSkip() {
-    setStepIndex((s) => s + 1);
+  async function handleAddExtraIncome() {
+    if (!extraCategoryId) { setStepError("Sélectionnez une catégorie."); return; }
+    const amount = parseAmount(extraDraft);
+    if (amount === null) { setStepError("Montant invalide (entre 0 et 1 000 000 €)."); return; }
+    setIsSaving(true);
+    try {
+      await onSaveAmount(extraCategoryId, String(amount));
+      setAddedExtraIds((prev) => new Set(prev).add(extraCategoryId));
+      setExtraDraft("");
+      setStepError("");
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   async function handleItemNext() {
@@ -188,8 +223,9 @@ export function MonthlyBudgetWizard({
 
                 {incomeMode === "confirm" ? (
                   <>
-                    <p className="text-sm text-fg-secondary">Ce revenu est-il toujours de :</p>
+                    <p className="text-sm text-fg-secondary">Déjà reçu ce mois-ci :</p>
                     <p className="text-2xl font-bold text-emerald-400 tabular-nums">{fmt(currentIncomeItem.suggestedAmount)} €</p>
+                    <p className="text-xs text-fg-subtle">Confirmez ce montant comme revenu du mois, ou modifiez-le.</p>
                   </>
                 ) : (
                   <>
@@ -207,7 +243,54 @@ export function MonthlyBudgetWizard({
                     </div>
                   </>
                 )}
-                <p className="text-xs text-fg-subtle">Chaque revenu confirmé s'ajoute au revenu total du mois.</p>
+              </>
+            )}
+
+            {isExtraIncomeStep && (
+              <>
+                <div className="flex items-center gap-1.5 text-xs text-fg-subtle">
+                  <WalletIcon className="w-3.5 h-3.5 text-emerald-400" />
+                  Revenu supplémentaire
+                </div>
+                <p className="text-sm text-fg-secondary">Un autre revenu à ajouter pour {monthLabel} ?</p>
+
+                {addedExtraIds.size > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {additionalIncomeOptions.filter((o) => addedExtraIds.has(o.categoryId)).map((o) => (
+                      <span key={o.categoryId} className="text-[11px] px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-emerald-400">
+                        {o.categoryName} ajouté
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {availableExtraOptions.length > 0 ? (
+                  <div className="space-y-2">
+                    <select value={extraCategoryId} onChange={(e) => setExtraCategoryId(e.target.value)} className={inputClass}>
+                      {availableExtraOptions.map((o) => <option key={o.categoryId} value={o.categoryId}>{o.categoryName}</option>)}
+                    </select>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number" min="0" step="0.01"
+                        value={extraDraft}
+                        onChange={(e) => setExtraDraft(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") void handleAddExtraIncome(); }}
+                        placeholder="Montant"
+                        className={inputClass}
+                      />
+                      <span className="text-xs text-fg-subtle flex-shrink-0">€</span>
+                    </div>
+                    <button
+                      onClick={() => void handleAddExtraIncome()}
+                      disabled={isSaving}
+                      className="w-full py-2 rounded-xl bg-surface-elevated border border-accent/30 text-accent text-sm font-medium hover:bg-accent/10 transition-colors disabled:opacity-60 flex items-center justify-center gap-1.5"
+                    >
+                      {isSaving ? <span className="w-3.5 h-3.5 border-2 border-surface-border border-t-accent rounded-full animate-spin" /> : <><PlusIcon className="w-3.5 h-3.5" /> Ajouter ce revenu</>}
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-xs text-fg-subtle">Tous vos revenus ont été ajoutés.</p>
+                )}
               </>
             )}
 
@@ -280,19 +363,19 @@ export function MonthlyBudgetWizard({
                   Non, modifier
                 </button>
                 <button onClick={() => void handleIncomeConfirmYes()} disabled={isSaving} className="flex-1 py-2.5 rounded-xl bg-accent text-accent-fg text-sm font-semibold hover:bg-accent-light transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
-                  {isSaving ? <span className="w-4 h-4 border-2 border-surface-border border-t-fg rounded-full animate-spin" /> : <>Oui, continuer <ArrowRightIcon className="w-4 h-4" /></>}
+                  {isSaving ? <span className="w-4 h-4 border-2 border-surface-border border-t-fg rounded-full animate-spin" /> : <>Confirmer <ArrowRightIcon className="w-4 h-4" /></>}
                 </button>
               </>
             )}
             {currentIncomeItem && incomeMode === "edit" && (
-              <>
-                <button onClick={handleIncomeSkip} className="flex-1 py-2.5 rounded-xl bg-surface-elevated border border-surface-border text-sm text-fg-secondary font-medium hover:bg-surface-hover transition-colors">
-                  Passer
-                </button>
-                <button onClick={() => void handleIncomeEditSave()} disabled={isSaving} className="flex-1 py-2.5 rounded-xl bg-accent text-accent-fg text-sm font-semibold hover:bg-accent-light transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
-                  {isSaving ? <span className="w-4 h-4 border-2 border-surface-border border-t-fg rounded-full animate-spin" /> : <>Continuer <ArrowRightIcon className="w-4 h-4" /></>}
-                </button>
-              </>
+              <button onClick={() => void handleIncomeEditSave()} disabled={isSaving} className="flex-1 py-2.5 rounded-xl bg-accent text-accent-fg text-sm font-semibold hover:bg-accent-light transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+                {isSaving ? <span className="w-4 h-4 border-2 border-surface-border border-t-fg rounded-full animate-spin" /> : <>Continuer <ArrowRightIcon className="w-4 h-4" /></>}
+              </button>
+            )}
+            {isExtraIncomeStep && (
+              <button onClick={() => setStepIndex((s) => s + 1)} className="flex-1 py-2.5 rounded-xl bg-accent text-accent-fg text-sm font-semibold hover:bg-accent-light transition-colors flex items-center justify-center gap-2">
+                Continuer <ArrowRightIcon className="w-4 h-4" />
+              </button>
             )}
             {currentExpenseItem && (
               <>
