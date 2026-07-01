@@ -19,6 +19,7 @@ import { Sidebar } from "../components/Sidebar";
 import { TopExpenseCategoriesChart } from "../components/TopExpenseCategoriesChart";
 import { TransactionList } from "../components/TransactionList";
 import { supabase } from "../lib/supabaseClient";
+import { toDateKey } from "../lib/utils";
 import type {
   Category,
   NewTransactionInput,
@@ -260,7 +261,7 @@ export function DashboardPage({ onLogout, userId, activeItem, onNavigate, userPr
     }
 
     async function loadTransactions() {
-      const today = new Date().toISOString().split("T")[0];
+      const today = toDateKey(new Date());
       const { data } = await supabase
         .from("transactions")
         .select("id, amount, type, date, note, category_id, categories(name)")
@@ -314,7 +315,7 @@ export function DashboardPage({ onLogout, userId, activeItem, onNavigate, userPr
   const expenseDelta = prevExpense > 0 ? ((selExpense - prevExpense) / prevExpense) * 100 : undefined;
   const selNetBalance = selIncome - selExpense;
   const selBudgetRestant = monthlyBudgetTotal > 0 ? Math.max(0, monthlyBudgetTotal - selExpense) : 0;
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = toDateKey(new Date());
   const todaySpending = useMemo(() => transactions.filter((tx) => tx.date === todayStr && tx.type === "expense").reduce((s, tx) => s + Math.abs(tx.amount), 0), [transactions, todayStr]);
   const todayLabel = new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
 

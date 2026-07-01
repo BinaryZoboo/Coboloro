@@ -21,6 +21,7 @@ import { DailySpendingChart } from "../components/DailySpendingChart";
 import { NotificationBell } from "../components/NotificationBell";
 import { Sidebar } from "../components/Sidebar";
 import { supabase } from "../lib/supabaseClient";
+import { toDateKey } from "../lib/utils";
 import type {
   Category,
   NewTransactionInput,
@@ -56,8 +57,8 @@ function getCategoryEmoji(category: string): string {
 }
 
 function getDateLabel(dateStr: string): string {
-  const today = new Date().toISOString().split("T")[0];
-  const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+  const today = toDateKey(new Date());
+  const yesterday = toDateKey(new Date(Date.now() - 86400000));
   if (dateStr === today) return "Aujourd'hui";
   if (dateStr === yesterday) return "Hier";
   return new Date(dateStr).toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
@@ -101,7 +102,7 @@ function SwipeableRow({ tx, onDelete, onEditRequest }: SwipeableRowProps) {
         onDragEnd={handleDragEnd}
         style={{ x }}
         onClick={() => onEditRequest(tx)}
-        className="relative z-10 bg-transparent flex items-center gap-4 px-5 min-h-[64px] py-3 hover:bg-surface-hover/50 transition-colors cursor-pointer lg:cursor-default"
+        className="relative z-10 bg-transparent flex items-center gap-4 px-5 min-h-[64px] py-3 hover:bg-surface-hover/50 transition-colors cursor-pointer"
       >
         <div className="w-10 h-10 flex-shrink-0 rounded-full bg-surface-elevated border border-surface-border flex items-center justify-center text-lg">
           {emoji}
@@ -120,6 +121,14 @@ function SwipeableRow({ tx, onDelete, onEditRequest }: SwipeableRowProps) {
             {Math.abs(tx.amount).toLocaleString("fr-FR", { minimumFractionDigits: 2 })} €
           </p>
         </div>
+
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(tx); }}
+          className="hidden lg:flex flex-shrink-0 w-8 h-8 items-center justify-center rounded-lg text-fg-subtle opacity-0 group-hover:opacity-100 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+          aria-label="Supprimer la transaction"
+        >
+          <Trash2Icon className="w-4 h-4" />
+        </button>
       </motion.div>
     </div>
   );
@@ -265,7 +274,10 @@ export function TransactionsPage({ onLogout, userId, activeItem, onNavigate, use
   }
 
   function handleRowActionRequest(tx: Transaction) {
-    if (window.matchMedia("(min-width: 1024px)").matches) return;
+    if (window.matchMedia("(min-width: 1024px)").matches) {
+      handleEditStart(tx);
+      return;
+    }
     setPendingAction(tx);
   }
 

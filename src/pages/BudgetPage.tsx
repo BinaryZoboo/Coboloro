@@ -18,7 +18,7 @@ import { NotificationBell } from "../components/NotificationBell";
 import { ProfileSheet, getInitials } from "../components/ProfileSheet";
 import { Sidebar } from "../components/Sidebar";
 import { supabase } from "../lib/supabaseClient";
-import { nextAndAfterMonthKeys } from "../lib/utils";
+import { nextAndAfterMonthKeys, toDateKey, toMonthKey } from "../lib/utils";
 import type { Category } from "../transaction";
 
 interface BudgetPageProps {
@@ -292,7 +292,7 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate, userProfi
   const [savingSavingsId, setSavingSavingsId] = useState<string | null>(null);
   const [error, setError] = useState("");
 
-  const activeMonthKey = useMemo(() => activeMonthStart.toISOString().split("T")[0], [activeMonthStart]);
+  const activeMonthKey = useMemo(() => toMonthKey(activeMonthStart), [activeMonthStart]);
 
   const isCurrentMonth = useMemo(() => {
     const now = new Date();
@@ -306,7 +306,7 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate, userProfi
       const [{ data: cats }, { data: buds }, { data: txs }, { data: recs }, { data: goals }, { data: placements }, { data: savBudgets }] = await Promise.all([
         supabase.from("categories").select("id, name, type").eq("user_id", userId).order("name"),
         supabase.from("budgets").select("id, category_id, month, planned_amount").eq("user_id", userId).eq("month", activeMonthKey),
-        supabase.from("transactions").select("amount, type, date, category_id").eq("user_id", userId).lte("date", new Date().toISOString().split("T")[0]).order("date", { ascending: false }),
+        supabase.from("transactions").select("amount, type, date, category_id").eq("user_id", userId).lte("date", toDateKey(new Date())).order("date", { ascending: false }),
         supabase.from("recurring_budgets").select("id, category_id, amount").eq("user_id", userId),
         supabase.from("savings_goals").select("id, name, emoji").eq("user_id", userId).order("created_at", { ascending: false }),
         supabase.from("savings_placements").select("id, name, emoji, type").eq("user_id", userId).order("created_at", { ascending: false }),
@@ -359,7 +359,7 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate, userProfi
 
   const lastThreeMonthKeys = useMemo(() => {
     const keys: string[] = [];
-    for (let i = 1; i <= 3; i++) keys.push(new Date(activeMonthStart.getFullYear(), activeMonthStart.getMonth() - i, 1).toISOString().split("T")[0]);
+    for (let i = 1; i <= 3; i++) keys.push(toMonthKey(new Date(activeMonthStart.getFullYear(), activeMonthStart.getMonth() - i, 1)));
     return keys;
   }, [activeMonthStart]);
 
@@ -378,7 +378,7 @@ export function BudgetPage({ onLogout, userId, activeItem, onNavigate, userProfi
     const monthsByCat: Record<string, Set<string>> = {};
     transactions.forEach((tx) => {
       if (tx.type !== "expense") return;
-      const key = new Date(new Date(tx.date).getFullYear(), new Date(tx.date).getMonth(), 1).toISOString().split("T")[0];
+      const key = toMonthKey(new Date(tx.date));
       if (!lastThreeMonthKeys.includes(key)) return;
       totals[tx.category_id] = (totals[tx.category_id] ?? 0) + Math.abs(tx.amount);
       if (!monthsByCat[tx.category_id]) monthsByCat[tx.category_id] = new Set();

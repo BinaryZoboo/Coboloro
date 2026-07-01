@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangleIcon, BellIcon, CheckCircleIcon, TagIcon, XIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { toMonthKey } from "../lib/utils";
 
 interface NotifItem {
   id: string;
@@ -28,8 +29,8 @@ export function NotificationBell({ userId }: NotificationBellProps) {
     let mounted = true;
     async function load() {
       const now = new Date();
-      const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-      const nextKey = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString().split("T")[0];
+      const monthKey = toMonthKey(now);
+      const nextKey = toMonthKey(new Date(now.getFullYear(), now.getMonth() + 1, 1));
 
       const [{ data: txs }, { data: cats }, { data: buds }, { data: recs }, { data: quickTxs }] = await Promise.all([
         supabase
